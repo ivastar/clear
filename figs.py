@@ -54,19 +54,23 @@ def figs_gn1(make_asn = True, check_background = True, run_prep = True, run_inte
 		NGROWY = 30
 		pad = 60
 
-		CATALOG = '../REF/GN_aXe_v0.1.cat'
-		REF_IMAGE = '../REF/goodsn_all_wfc3_ir_f125w_060mas_v1.0_drz.fits'
+		CATALOG = '/3DHST/Photometry/Release/v4.0/GOODS-N/Detection/goodsn_3dhst.v4.0.F125W_conv.cat'
+		REF_IMAGE = '../REF/goodsn_3dhst.v4.0.F125W_orig_sci.fits'
 		REF_EXT = 0
-		SEG_IMAGE = '../REF/finalseg_GN_v0.1.fits'
+		SEG_IMAGE = '/3DHST/Photometry/Release/v4.0/GOODS-N/Detection/goodsn_3dhst.v4.0.F160W_seg.fits'
 		REF_FILTER = 'F125W'
 
 		grism = glob.glob('FIGS-GN1*G102_asn.fits')
 
 		for i in range(len(grism)):
 			pointing=grism[i].split('_asn')[0]
+            if pointing in []:
+                ref_exp = 3
+            else:
+                ref_exp = 0
     
 			adriz_blot(pointing=pointing, pad=pad, NGROWX=NGROWX, NGROWY=NGROWY, growx=1, 
-				growy=1, auto_offsets=True, ref_exp=0, ref_image=REF_IMAGE, ref_ext=REF_EXT, 
+				growy=1, auto_offsets=True, ref_exp=ref_exp, ref_image=REF_IMAGE, ref_ext=REF_EXT, 
 				ref_filter=REF_FILTER, seg_image=SEG_IMAGE, cat_file=CATALOG, grism='G102')                                                                                  
     		unicorn.reduce.interlace_combine(pointing.replace('G102','F105W'), view=False, use_error=True, 
     			make_undistorted=False, pad=pad, NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
