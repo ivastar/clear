@@ -55,11 +55,11 @@ def interlace_clear():
 	
     from unicorn.reduce import adriz_blot_from_reference as adriz_blot
       
-	NGROWX = 400
+	NGROWX = 200
 	NGROWY = 30
 	pad = 60
 
-	CATALOG = '/3DHST/Photometry/Release/v4.0/GOODS-S/Detection/goodss_3dhst.v4.0.F125W_conv.cat'
+	CATALOG = '../REF/goodss_3dhst.v4.0.F125W_conv_fix.cat'
 	REF_IMAGE = '../REF/goodss_3dhst.v4.0.F125W_orig_sci.fits'
 	REF_EXT = 0
 	SEG_IMAGE = '/3DHST/Photometry/Release/v4.0/GOODS-S/Detection/goodss_3dhst.v4.0.F160W_seg.fits'
@@ -67,37 +67,52 @@ def interlace_clear():
 
 	grism = glob.glob('GS3*G102_asn.fits')
 
-	for i in range(len(grism)):
-		pointing=grism[i].split('_asn')[0]
-        
-        if pointing.startswith('GS3-32-173') or pointing.startswith('GS3-33-173'):
-            ref_exp = 1
-        else:
-            ref_exp = 0
-    
-		adriz_blot(pointing=pointing, pad=pad, NGROWX=NGROWX, NGROWY=NGROWY, growx=2, 
-			growy=2, auto_offsets=True, ref_exp=ref_exp, ref_image=REF_IMAGE, ref_ext=REF_EXT, 
-			ref_filter=REF_FILTER, seg_image=SEG_IMAGE, cat_file=CATALOG, grism='G102')                                                                                  
+for i in range(len(grism)):
+	pointing=grism[i].split('_asn')[0]       
+    if pointing.startswith('GS3-32-173') or pointing.startswith('GS3-33-173'):
+        ref_exp = 1
+    else:
+        ref_exp = 0
+	adriz_blot(pointing=pointing, pad=pad, NGROWX=NGROWX, NGROWY=NGROWY, growx=2, 
+		growy=2, auto_offsets=True, ref_exp=ref_exp, ref_image=REF_IMAGE, ref_ext=REF_EXT, 
+		ref_filter=REF_FILTER, seg_image=SEG_IMAGE, cat_file=CATALOG, grism='G102')                                                                                  
 		unicorn.reduce.interlace_combine(pointing.replace('G102','F105W'), view=False, use_error=True, 
 			make_undistorted=False, pad=pad, NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
-			growx=2, growy=2, auto_offsets=True, ref_exp=0)
+			growx=2, growy=2, auto_offsets=True, ref_exp=ref_exp)
 		unicorn.reduce.interlace_combine(pointing, view=False, use_error=True, 
 			make_undistorted=False, pad=pad, NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
-			growx=2, growy=2, auto_offsets=True, ref_exp=0)
+			growx=2, growy=2, auto_offsets=True, ref_exp=ref_exp)
     
 def model_clear():
     
-    	grism = glob.glob('GS3*G102_asn.fits')
+	grism = glob.glob('GS3*G102_asn.fits')
     	
-		for i in range(len(grism)):
-			root = grism[i].split('-G102')[0]
-			#m0 = unicorn.reduce.GrismModel(root='goodss-01')
-			#model_list = m0.get_eazy_templates(dr_min=0.5, MAG_LIMIT=25)
-            model = unicorn.reduce.process_GrismModel(root=root, grow_factor=2, growx=2, growy=2, 
-            	MAG_LIMIT=24, REFINE_MAG_LIMIT=21, make_zeroth_model=False, use_segm=False, 
-            	model_slope=0, direct='F105W', grism='G102', BEAMS=['A', 'B', 'C', 'D','E'], 
-            	align_reference=False)
-			if not os.path.exists(os.path.basename(model.root) + '-G102_maskbg.dat'):
-				model.refine_mask_background(threshold=0.002, grow_mask=14, update=True, resid_threshold=4, 
-					clip_left=640, save_figure=True, interlace=True)
+	for i in range(len(grism)):
+		root = grism[i].split('-G102')[0]
+		#m0 = unicorn.reduce.GrismModel(root='goodss-01')
+		#model_list = m0.get_eazy_templates(dr_min=0.5, MAG_LIMIT=25)
+        model = unicorn.reduce.process_GrismModel(root=root, grow_factor=2, growx=2, growy=2, 
+        	MAG_LIMIT=24, REFINE_MAG_LIMIT=21, make_zeroth_model=False, use_segm=False, 
+        	model_slope=0, direct='F105W', grism='G102', BEAMS=['A', 'B', 'C', 'D','E'], 
+        	align_reference=True)
+		if not os.path.exists(os.path.basename(model.root) + '-G102_maskbg.dat'):
+			model.refine_mask_background(threshold=0.002, grow_mask=14, update=True, resid_threshold=4, 
+				clip_left=640, save_figure=True, interlace=True)
+                    
+def extract_clear():
+    
+    ids = [37945,38822,39286,39411]
+    
+    grism = glob.glob('GS3*G102_asn.fits')
+    for i in range(len(grism)):
+        root = grism[i].split('-G102')[0]
+        model = unicorn.reduce.process_GrismModel(root=root, grow_factor=2, growx=2, growy=2, 
+        	MAG_LIMIT=24, REFINE_MAG_LIMIT=21, make_zeroth_model=False, use_segm=False, 
+        	model_slope=0, direct='F105W', grism='G102', BEAMS=['A', 'B', 'C', 'D','E'], 
+        	align_reference=False)
+        for id in ids:
+            model.twod_spectrum(id=id, grow=1, miny=-36, maxy=None, CONTAMINATING_MAGLIMIT=23, refine=False, verbose=False, force_refine_nearby=False, USE_REFERENCE_THUMB=True, USE_FLUX_RADIUS_SCALE=3, BIG_THUMB=False, extract_1d=True)
+            model.show_2d(savePNG=True, verbose=True)
+            
+
     
