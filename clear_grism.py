@@ -101,18 +101,42 @@ def model_clear():
                     
 def extract_clear():
     
-    ids = [37945,38822,39286,39411]
+    #ids = [37945,38822,39286,39411]
     
     grism = glob.glob('GS3*G102_asn.fits')
+    tab = table.read('../REF/Steves_source_goodss_w_ids.dat', format='ascii')
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(root=root, grow_factor=2, growx=2, growy=2, 
         	MAG_LIMIT=24, REFINE_MAG_LIMIT=21, make_zeroth_model=False, use_segm=False, 
         	model_slope=0, direct='F105W', grism='G102', BEAMS=['A', 'B', 'C', 'D','E'], 
         	align_reference=False)
-        for id in ids:
-            model.twod_spectrum(id=id, grow=1, miny=-36, maxy=None, CONTAMINATING_MAGLIMIT=23, refine=False, verbose=False, force_refine_nearby=False, USE_REFERENCE_THUMB=True, USE_FLUX_RADIUS_SCALE=3, BIG_THUMB=False, extract_1d=True)
-            model.show_2d(savePNG=True, verbose=True)
+        for id in [id for id in tab['ID'] if id in model.cat.id]:
+            try:
+                model.twod_spectrum(id=id, grow=1, miny=-36, maxy=None, CONTAMINATING_MAGLIMIT=23, refine=False, verbose=False, force_refine_nearby=False, USE_REFERENCE_THUMB=True, USE_FLUX_RADIUS_SCALE=3, BIG_THUMB=False, extract_1d=True)
+                model.show_2d(savePNG=True, verbose=True)
+                print 'Extracted {}'.format(id)
+            except:
+                continue
+                
+def stack_clear():
+    
+    import os
+    from unicorn.hudf import Stack2D
+    
+    grism = glob.glob('GS3*G102_asn.fits')
+    tab = table.read('../REF/Steves_source_goodss_w_ids.dat', format='ascii')
+    for i in range(len(grism)):
+        root = grism[i].split('-G102')[0]
+        model = unicorn.reduce.process_GrismModel(root=root, grow_factor=2, growx=2, growy=2, MAG_LIMIT=24, REFINE_MAG_LIMIT=21, make_zeroth_model=False, use_segm=False, model_slope=0, direct='F105W', grism='G102', BEAMS=['A', 'B', 'C', 'D','E'], align_reference=False)
+        for id in tab['ID']:
+            if (id in model.cat.id) and (not os.path.exists('GS-G102_{}.2D.fits'.format(id))):
+                try:
+                    search='GS-*-*-G102'
+                    print '%s*%05d.2D.fits'%(search, id)
+                    spec = Stack2D(id=np.int(id), inverse=False, scale=[1,99], fcontam=2.,ref_wave = 1.05e4, root='GS3-G102', search='GS-*-*-G102', files=None, go=True, new_contam=False)
+                except:
+                    continue
             
 
     
