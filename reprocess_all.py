@@ -1,6 +1,11 @@
 #! /usr/bin/env python
 
 """Module to reprocess all data or subset of visits. 
+Pops reads designated reads. 
+Check the new FLTs against old. They should cleaner, especially if
+specified a read to be removed.
+
+*Step 3 of Prep.*
 
 Use:
 
@@ -109,7 +114,7 @@ def reprocess_all(visits=[]):
                 # Satelite
                 pop_reads=[9]
             elif 'icxt01clq' in rawname:
-                # streak-thing?  (haven't reprocessed)
+                # streak-thing? 
                 pop_reads=[2]
 
             reprocess_wfc3.make_IMA_FLT(raw=rawname, pop_reads=pop_reads)

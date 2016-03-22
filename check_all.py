@@ -1,9 +1,35 @@
 #! /usr/bin/env python
 
-"""Module to check all data or subset of . 
+"""Module to create diagnostic PNGs for checking ramps in a visit or 
+subset of visits. If find bad reads, will need to mark them to be popped 
+in :mod:`reprocess_all.py`.
+For earth-flat persistence, will need to create masks.
+Also very good idea to flip through JPGs from QL or just DS9 the FLT!
+
+*Step 2 of Prep.*
+
+HOW TO CREATE MASKS
+++++++++++++++++++++
+- Be in RAW.
+- In ipython,
+  > import threedhst.dq
+  > dq = threedhst.dq.checkDQ(asn_direct_file='icxt07020_asn.fits', asn_grism_file='icxt07020_asn.fits', path_to_flt='./')
+- Once DS9 opens, select the FLT then,
+  "flag grism"
+  draw polygons
+  "flag grism" again
+  A *reg file for that FLT will be saved.
+
+HOW TO APPLY MASKS
++++++++++++++++++++
+- Masks are applied in the prep step
+   threedhst.prep_flt_astrodrizzle.prep_direct_grism_pair
+   which I wrapped in :mod:`align_all.py`.
 
 Use:
     
+    Be in RAW directory.
+
     >>> python check_all.py --v (optional)
 
     --v : 

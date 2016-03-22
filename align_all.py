@@ -1,6 +1,18 @@
 #! /usr/bin/env python
 
 """Module to align all data or subset of visits. 
+It runs TWEAKREG and aligns the direct images to a catalog, flags cosmic
+rays, and subtracts background.
+For the grisms, it does a more complicated background subtraction (see 
+Gabe's ISR). If persistence files available, it will mask the affected 
+pixels.
+When it is complete, should look at all the FLTs. They all should be 
+flatfielded, have background substracted (so average is about 0). No 
+cartwheel should be visible (but Deathstar still there). No streaks. 
+No gradients.
+
+
+*Step 4 of Prep.*
 
 Use:
     
@@ -28,17 +40,31 @@ Notes:
 import argparse
 import os
 import glob
-from astropy.io import fits as pyfits
+import shutil
 import numpy as np
 
 import threedhst
 import unicorn
 
-import clear_tools
-from clear_tools.set_paths import paths
+from clear.set_paths import paths
 
 import threedhst.prep_flt_astrodrizzle as init
 import unicorn.interlace_test as test
+
+
+def cleanup_outputs():
+    """ Removes all extraneous files from last run of this script.
+    """
+
+    path_to_outputs = paths['path_to_outputs']
+
+    for f in ['sex_stderr', 'threedhst_auto.param', 'threedhst_auto.sex',
+              'threedhst_auto-2.param', 'threedhst_auto-2.sex', 
+              'tweakreg.log', 'astrodrizzle.log', 'default.nnw', 
+              'gauss_4.0_7x7.conv', 'grism.conv']
+        f = path_to_outputs + f
+        if os.path.isfile(f):
+            os.remove(f)
 
 
 def align_all(visits=[], make_asn = False):
@@ -46,6 +72,9 @@ def align_all(visits=[], make_asn = False):
     """
     print paths
     print visits
+
+    shutil.copy('../RAW/files.info', 'files.info')
+    cleanup_outputs()
 
     if make_asn:
         unicorn.candels.make_asn_files()
@@ -55,22 +84,13 @@ def align_all(visits=[], make_asn = False):
         #   os.rename(asn, asn.lower())
 
     direct_files = glob.glob('*F105W_asn.fits')
-    grism_files = glob.glob('*G102_asn.fits')
 
     print direct_files
-    
-  
 
-    for direct, grism in zip(direct_files, grism_files):
+    for direct in direct_files:
+        grism = direct.replace('F105W', 'G102')
+        print " "
         print direct, grism
-
-        if 'GN' in direct:
-            cat_file = 'goodsn_radec.cat'
-            print "Using radec cat for NORTH, {}".format(cat_file)
-        elif 'GS' in direct:
-            cat_file = 'goodss_3dhst.v4.1.radec.cat'
-            print "Using radec cat for SOUTH, {}".format(cat_file)
-
 
         visit = int(grism[4:6])
         print "Visit: {}".format(visit)
@@ -78,6 +98,13 @@ def align_all(visits=[], make_asn = False):
         # everything if the list is empty.
 
         if ((visits != []) and (visit in visits)) or (visits == []):
+
+            if 'GN' in direct:
+                cat_file = 'goodsn_radec.cat'
+                print "Using radec cat for NORTH, {}".format(cat_file)
+            elif 'GS' in direct:
+                cat_file = 'goodss_3dhst.v4.1.radec.cat'
+                print "Using radec cat for SOUTH, {}".format(cat_file)
 
             init.prep_direct_grism_pair(direct_asn=direct, grism_asn=grism, 
                 radec=paths['path_to_ref_files']+'REF/'+cat_file,
@@ -122,4 +149,4 @@ if __name__=="__main__":
 
     visits = args.visits
 
-    align_all(visits=visits)
+    align_all(visits=visits, make_asn = True)

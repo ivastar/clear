@@ -17,7 +17,7 @@ quiescent_cats = {'S':'UVJ_quiescent_goodss.dat', 'N':'UVJ_quiescent_goodsn.dat'
 steves_cats = {'S':'Steves_source_goodss_w_ids.dat', 'N':'Steves_source_goodsn_w_ids.dat'}
 
 
-def prep_clear(make_asn = True, check_background = False, run_prep = True):
+def prep_clear(field=field, make_asn = True, check_background = False, run_prep = True):
 
     import threedhst.prep_flt_astrodrizzle as init
     import unicorn.interlace_test as test
@@ -55,8 +55,8 @@ def prep_clear(make_asn = True, check_background = False, run_prep = True):
 
         os.chdir(paths['path_to_PREPARE'])
 
-        grism_files = glob.glob('GS3-3[01]*G102_asn.fits')
-        direct_files = glob.glob('GS3-3[01]*F105W_asn.fits')
+        grism_files = glob.glob(field + '*G102_asn.fits')
+        direct_files = glob.glob(field + '*F105W_asn.fits')
 
         for direct, grism in zip(direct_files, grism_files):
             init.prep_direct_grism_pair(direct_asn=direct, grism_asn=grism, 
@@ -137,6 +137,7 @@ def model_clear(field):
             model.refine_mask_background(threshold=0.002, grow_mask=14, update=True, resid_threshold=4, 
                 clip_left=640, save_figure=True, interlace=True)
 
+
 def extract_clear(field, cat):
     """
     Parameters:
@@ -175,6 +176,7 @@ def extract_clear(field, cat):
                 print 'Extracted {}'.format(id)
             except:
                 continue
+                
                 
 def stack_clear(field, cat):
     """
@@ -222,11 +224,11 @@ def stack_clear(field, cat):
 
 if __name__=='__main__':
     cats =  ['quiescent', 'steves']
-    fields = ['GS3']  #['GS1', 'GS2', 'GS3', 'GS5', 'GN4', 'GN5']
+    fields = ['GS3']  #['GS1', 'GS2', 'GS3', 'GS5', 'GN4', 'GN5', 'GN7']
     for field in fields:
         print "***Beginning field {}***".format(field)
         print ""
-        #interlace_clear(field=field)
-        #model_clear(field=field)
-        extract_clear(field=field, cat=cats[0])
-        stack_clear(field=field, cat=cats[0])
+        interlace_clear(field=field)
+        model_clear(field=field)
+        #extract_clear(field=field, cat=cats[0])
+        #stack_clear(field=field, cat=cats[0])
