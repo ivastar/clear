@@ -47,15 +47,16 @@ Outputs:
 
 """
 
-from astropy.io import ascii
-import numpy as np
 import argparse
 import glob
+import numpy as np
 import os
 import shutil
+
+from astropy.io import ascii
+
 import mywfc3
 from mywfc3 import reprocess_wfc3
-#import unicorn
 
 
 #-------------------------------------------------------------------------------  
@@ -72,6 +73,7 @@ def read_filesinfo():
         print "'files.info' does NOT exist."
 
     return files, filters
+
 
 #-------------------------------------------------------------------------------  
 
@@ -96,6 +98,7 @@ def check_all(visits=[]):
     for png in pngs:
         print "Moving {}".format(png)
         shutil.move(png, '../checks/')
+
 
 #-------------------------------------------------------------------------------  
 
@@ -123,6 +126,8 @@ def parse_args():
      
     return args
 
+
+#-------------------------------------------------------------------------------  
 #-------------------------------------------------------------------------------  
 
 if __name__=="__main__":

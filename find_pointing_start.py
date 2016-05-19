@@ -37,10 +37,12 @@ def find_pointing_start(asn_table_name):
     path_to_outputs = set_paths.paths['path_to_outputs']
 
     # Read in files.info.
-    data = ascii.read(os.path.join(path_to_outputs, 'files.info'))
+    data = ascii.read(os.path.join(path_to_outputs, 'files.info'), guess=False, format='basic')
 
     # Makes lists out of FILE, TARGNAME, TIME-OBS
-    filenames = np.array(data['FILE'])
+    # Note that if this is not working, just open 'file.info' and convert all tabs to spaces
+    # with your editor. For some reason 'flt_info.sh' mixes the two sometimes...
+    filenames = np.array(data['FILE']) 
     targnames = np.array(data['TARGNAME'])
     dateobses = np.array(data['DATE-OBS'])
     timeobses = np.array(data['TIME-OBS'])

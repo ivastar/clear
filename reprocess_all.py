@@ -31,12 +31,14 @@ Notes:
     Based on `unicorn.prepare_fixed_flt.py`.
 """
 
-from astropy.io import ascii
-import numpy as np
 import argparse
 import glob
+import numpy as np
 import os
 import shutil
+
+from astropy.io import ascii
+
 import mywfc3
 from mywfc3 import reprocess_wfc3
 
@@ -116,6 +118,15 @@ def reprocess_all(visits=[]):
             elif 'icxt01clq' in rawname:
                 # streak-thing? 
                 pop_reads=[2]
+            elif 'icat07bxq' in rawname:
+                # 3DHST, satelite.
+                pop_reads=[3]
+            elif 'icat21cfq' in rawname:
+                # 3DHST, CR barf
+                pop_reads=[6]
+            elif 'icat11c2q' in rawname:
+                # 3DHST, CR thing
+                pop_reads=[6]
 
             reprocess_wfc3.make_IMA_FLT(raw=rawname, pop_reads=pop_reads)
 
@@ -147,6 +158,8 @@ def parse_args():
     return args
 
 
+#-------------------------------------------------------------------------------  
+#-------------------------------------------------------------------------------  
 
 if __name__=="__main__":
 

@@ -28,7 +28,7 @@ Authors:
 
 Example:
 
-    >>> python check_all.py --v 44 05
+    >>> python align_all.py --v 44 05
 
 Outputs:
 
@@ -47,10 +47,11 @@ import threedhst
 import unicorn
 
 from clear.set_paths import paths
-
 import threedhst.prep_flt_astrodrizzle as init
 import unicorn.interlace_test as test
 
+
+#-------------------------------------------------------------------------------  
 
 def cleanup_outputs():
     """ Removes all extraneous files from last run of this script.
@@ -58,14 +59,16 @@ def cleanup_outputs():
 
     path_to_outputs = paths['path_to_outputs']
 
-    for f in ['sex_stderr', 'threedhst_auto.param', 'threedhst_auto.sex',
-              'threedhst_auto-2.param', 'threedhst_auto-2.sex', 
-              'tweakreg.log', 'astrodrizzle.log', 'default.nnw', 
-              'gauss_4.0_7x7.conv', 'grism.conv']
+    for f in ['sex_stderr', 'threedhst_auto.param', 'threedhst_auto.sex',\
+              'threedhst_auto-2.param', 'threedhst_auto-2.sex', \
+              'tweakreg.log', 'astrodrizzle.log', 'default.nnw', \
+              'gauss_4.0_7x7.conv', 'grism.conv']:
         f = path_to_outputs + f
         if os.path.isfile(f):
             os.remove(f)
 
+
+#-------------------------------------------------------------------------------  
 
 def align_all(visits=[], make_asn = False):
     """
@@ -92,14 +95,17 @@ def align_all(visits=[], make_asn = False):
         print " "
         print direct, grism
 
-        visit = int(grism[4:6])
+        if 'GDN' in grism:
+            visit = int(grism.split('-')[1])
+        else:
+            visit = int(grism[4:6])
         print "Visit: {}".format(visit)
         # Only reprocess the visits in the list, or reprocess
         # everything if the list is empty.
 
         if ((visits != []) and (visit in visits)) or (visits == []):
 
-            if 'GN' in direct:
+            if 'GN' in direct or 'GDN' in direct:
                 cat_file = 'goodsn_radec.cat'
                 print "Using radec cat for NORTH, {}".format(cat_file)
             elif 'GS' in direct:
@@ -111,8 +117,6 @@ def align_all(visits=[], make_asn = False):
                 raw_path = paths['path_to_RAW'], mask_grow=8, 
                 scattered_light=False, final_scale = None,
                 skip_direct=False, ACS=False, align_threshold=6)
-
-
 
 
 #-------------------------------------------------------------------------------  
@@ -142,6 +146,8 @@ def parse_args():
     return args
 
 
+#-------------------------------------------------------------------------------  
+#-------------------------------------------------------------------------------  
 
 if __name__=="__main__":
 

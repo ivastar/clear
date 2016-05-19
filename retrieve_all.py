@@ -33,6 +33,8 @@ import subprocess
 from clear.set_paths import paths
 
 
+#-------------------------------------------------------------------------------  
+
 def make_filesinfo():
     """ Creates files.info file in RAW.
     """
@@ -48,6 +50,7 @@ def make_filesinfo():
     shutil.copy(path_to_software+'threedhst/threedhst/bin/files.info', path_to_RAW + 'files.info')
 
 
+#-------------------------------------------------------------------------------  
 
 def retrieve_all(visits=[], overwrite=True):
     """
@@ -140,6 +143,8 @@ def parse_args():
     return args
 
 
+#-------------------------------------------------------------------------------  
+#-------------------------------------------------------------------------------  
 
 if __name__=="__main__":
 
