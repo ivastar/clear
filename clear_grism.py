@@ -1,7 +1,9 @@
 import os
 import glob
-import pyfits
 import numpy as np
+import pyfits
+import shutil
+import time
 
 import threedhst
 import unicorn
@@ -102,6 +104,10 @@ def interlace_clear(field):
    - Make sure *G102_ref_inter.fits and *inter_seg.fits are all aligned!
    - Load each *inter.reg into each *G102_ref_inter.fits to check 
      objects overlap catalog.
+   - These checks must be done by Visit, not field, since Visits are rotated.
+     So do for example,
+
+   ds9 GN7-38-315-F105W_inter.fits GN7-38-315-G102_ref_inter.fits GN7-38-315-G102_inter_seg.fits &
 
 
     Parameters:
@@ -138,26 +144,28 @@ def interlace_clear(field):
 
     for i in range(len(grism)):
         pointing=grism[i].split('_asn')[0]
+        print pointing
         
         # Find whether pointing begins with a direct image (0) or grism (1).
         ref_exp = find_pointing_start(pointing)
         print "ref_exp: {}, pointing: {}".format(ref_exp, pointing)
 
-        """
         adriz_blot(pointing=pointing, pad=pad, NGROWX=NGROWX, 
             NGROWY=NGROWY, growx=2, growy=2, auto_offsets=True, 
             ref_exp=ref_exp, ref_image=REF_IMAGE, ref_ext=REF_EXT, 
             ref_filter=REF_FILTER, seg_image=SEG_IMAGE, 
-            cat_file=CATALOG, grism='G102')                                                                                  
+            cat_file=CATALOG, grism='G102')     
+        # Interlace the direct images. Set ref_exp to always be zero.                                                                             
         unicorn.reduce.interlace_combine(pointing.replace('G102','F105W'), 
             view=False, use_error=True, make_undistorted=False, pad=pad, 
             NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
-            growx=2, growy=2, auto_offsets=True, ref_exp=ref_exp)
+            growx=2, growy=2, auto_offsets=True, ref_exp=0)
+        # Interlace the grism images.
         unicorn.reduce.interlace_combine(pointing, view=False, 
             use_error=True, make_undistorted=False, pad=pad, 
             NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
             growx=2, growy=2, auto_offsets=True, ref_exp=ref_exp)
-        """
+
 
     print "*** interlace_clear step complete ***"
 
@@ -186,6 +194,13 @@ def model_clear(field):
     the start-end of spectra should be the same; images should
     be of same brightness.
 
+    For example,
+
+    ds9 GDN7-07-335-G102_inter_model.fits GDN7-07-335-G102_inter.fits &
+
+
+    ** Note that the *mask* files do not overwrite **
+    ** Delete these files first if want to do a rerun **
 
 
     Parameters:
@@ -213,7 +228,7 @@ def model_clear(field):
 
 #-------------------------------------------------------------------------------  
 
-def extract_clear(field, cat):
+def extract_clear(field, catname):
     """
 
     ** Step 3. of Interlace steps. **
@@ -229,16 +244,16 @@ def extract_clear(field, cat):
     #ids = [37945,38822,39286,39411]
     path_to_REF = paths['path_to_ref_files'] + 'REF/'
 
-    if cat == 'steves':
+    if catname == 'steves':
         cat = steves_cats
-    elif cat == 'quiescent':
+    elif catname == 'quiescent':
         cat = quiescent_cats
-    print "Chosen catalogs: {}".format(cat)
+    print "Chosen GS and GN catalogs: {}".format(cat)
 
     grism = glob.glob(field+'*G102_asn.fits')
-    if 'GS' in field:
+    if 'GS' in field or 'GDS' in field:
         tab = Table.read(path_to_REF + cat['S'], format='ascii')
-    elif 'GN' in field:
+    elif 'GN' in field or 'GDN' in field:
         tab = Table.read(path_to_REF + cat['N'], format='ascii')
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
@@ -265,7 +280,7 @@ def extract_clear(field, cat):
 
 #-------------------------------------------------------------------------------  
 
-def stack_clear(field, cat):
+def stack_clear(field, catname):
     """
 
     Parameters:
@@ -278,6 +293,9 @@ def stack_clear(field, cat):
     Notes:
         How will this step work when trying to stack the CLEAR and the 3DHST 
         visits?
+
+        Do I still need to rename the 13420 fields or is there a way to associate
+        them with the 14227 fields?
     """
     
     import os
@@ -285,11 +303,11 @@ def stack_clear(field, cat):
  
     path_to_REF = paths['path_to_ref_files'] + 'REF/'
     
-    if cat == 'steves':
+    if catname == 'steves':
         cat = steves_cats
-    elif cat == 'quiescent':
+    elif catname == 'quiescent':
         cat = quiescent_cats
-    print "Chosen catalogs: {}".format(cat)
+    print "Chosen GS and GN catalogs: {}".format(cat)
 
     grism = glob.glob(field+'*G102_asn.fits')
     if 'GS' in field or 'GDS' in field:
@@ -323,19 +341,44 @@ def stack_clear(field, cat):
                 except:
                     continue
 
+    cleanup_extractions(catname=catname)
+
     print "*** stack_clear step complete ***"
-            
+    
+
+#------------------------------------------------------------------------------- 
+
+def cleanup_extractions(catname):
+    """ Moves all *1D*, *2D*, and *stack* files to a sub-directory
+    in outputs named extractions_<catalog>_<ddMonthyyyy>.
+
+    Parameters:
+    """
+
+    files = glob.glob('*1D*') + glob.glob('*2D*') + glob.glob('*stack*')
+    print files
+
+    dirname = 'extractions_{}_{}'.format(catname, time.strftime('%d%B%Y'))
+    if not os.path.isdir(dirname):
+        os.mkdir(dirname)
+
+    print "Moving extractions from catalog {} to {}".format(catname, dirname)
+
+    for f in files:
+        shutil.move(f, os.path.join(dirname,f))
+
 
 #-------------------------------------------------------------------------------  
 #-------------------------------------------------------------------------------  
 
 if __name__=='__main__':
     cats =  ['quiescent', 'steves']
-    fields = ['GN7']  #['GS1', 'GS2', 'GS3', 'GS5', 'GN4', 'GN5', 'GN7']
+    fields = ['GN7', 'GDN7']  #['GS1', 'GS2', 'GS3', 'GS5', 'GN4', 'GN5', 'GN7']
     for field in fields:
         print "***Beginning field {}***".format(field)
         print ""
-        interlace_clear(field=field)
+        #interlace_clear(field=field)
         #model_clear(field=field)
-        #extract_clear(field=field, cat=cats[0])
-        #stack_clear(field=field, cat=cats[0])
+        extract_clear(field=field, catname=cats[1])
+        stack_clear(field=field, catname=cats[1])
+
