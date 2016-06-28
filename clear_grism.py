@@ -18,6 +18,14 @@ from set_paths import paths
 quiescent_cats = {'S':'UVJ_quiescent_goodss.dat', 'N':'UVJ_quiescent_goodsn.dat'}
 steves_cats = {'S':'Steves_source_goodss_w_ids.dat', 'N':'Steves_source_goodsn_w_ids.dat'}
 
+## Associate CLEAR pointings with overlapping 3DHST pointings.
+overlapping_fields = {'GN1':['GDN20'],
+                      'GN2':['GDN8', 'GDN12', 'GDN21', 'GDN25'],
+                      'GN3':['GDN18', 'GDN19', 'GDN22', 'GDN23'],
+                      'GN4':['GDN21', 'GDN22', 'GDN25', 'GDN26'],
+                      'GN6':['GDN18', 'GDN17'],
+                      'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11']}
+
 
 #-------------------------------------------------------------------------------  
 
@@ -123,7 +131,10 @@ def interlace_clear(field):
       
     NGROWX = 200
     NGROWY = 30
-    pad = 60
+    if 'GDN' in field:
+        pad = 500
+    else:
+        pad = 60
 
     if 'GS' in field or 'GDS' in field:
         CATALOG = path_to_REF + 'goodss_3dhst.v4.0.F125W_conv_fix.cat'
@@ -147,7 +158,7 @@ def interlace_clear(field):
         print pointing
         
         # Find whether pointing begins with a direct image (0) or grism (1).
-        ref_exp = find_pointing_start(pointing)
+        ref_exp = 0 #find_pointing_start(pointing)
         print "ref_exp: {}, pointing: {}".format(ref_exp, pointing)
 
         adriz_blot(pointing=pointing, pad=pad, NGROWX=NGROWX, 
@@ -237,9 +248,13 @@ def extract_clear(field, catname):
     Parameters:
         field : string
             The GOODS field to process. 
-        cat : dict 
-            Keys either 'S' or 'N' with values of source catalog filenames.
-            The catalogs themselves should be ID, RA, DEC.  
+        catname : string
+            Name of the catalog.
+
+    Checks:
+        *2D.png should show some extracted spectra (most may be empty)
+
+
     """  
     #ids = [37945,38822,39286,39411]
     path_to_REF = paths['path_to_ref_files'] + 'REF/'
@@ -255,6 +270,7 @@ def extract_clear(field, catname):
         tab = Table.read(path_to_REF + cat['S'], format='ascii')
     elif 'GN' in field or 'GDN' in field:
         tab = Table.read(path_to_REF + cat['N'], format='ascii')
+
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(root=root, 
@@ -278,6 +294,7 @@ def extract_clear(field, catname):
 
     print "*** extract_clear step complete ***"              
 
+
 #-------------------------------------------------------------------------------  
 
 def stack_clear(field, catname):
@@ -285,19 +302,24 @@ def stack_clear(field, catname):
 
     Parameters:
         field : string
-            The GOODS field to process. 
-        cat : dict 
-            Keys either 'S' or 'N' with values of source catalog filenames.
-            The catalogs themselves should be ID, RA, DEC.
+            The GOODS field to process. Needs to know to reference GN or GS 
+            catalog.
+        catname : string
+            Name of the catalog.
+
+    Checks:
+        In *stack.png check that the contam models reasonably match actual
+        image and that the contam-flux is reasonable.
+        python> !open *stack.png
 
     Notes:
-        How will this step work when trying to stack the CLEAR and the 3DHST 
-        visits?
-
-        Do I still need to rename the 13420 fields or is there a way to associate
-        them with the 14227 fields?
+        This should stack ALL the *2D* files present in the directory 
+        that have the same id, REGARDLESS of the field name.
     """
     
+    # Need a function that knows to search over all correlating 3dHST pointings
+    # when given a specific CLEAR pointing.
+
     import os
     from unicorn.hudf import Stack2D
  
@@ -328,15 +350,16 @@ def stack_clear(field, catname):
                                                   BEAMS=['A', 'B', 'C', 'D','E'],
                                                   align_reference=False)
         for id in tab['ID']:
-            if (id in model.cat.id) and (not os.path.exists(field+'-G102_{}.2D.fits'.format(id))):
+            if (id in model.cat.id):
+                #and (not os.path.exists(field+'-G102_{}.2D.fits'.format(id))):
                 try:
-                    search=field+'-*-*-G102'
-                    print '%s*%05d.2D.fits'%(search, id)
+                    search='*-*-*-G102'
+                    print 'searching %s*%05d.2D.fits'%(search, id)
                     spec = Stack2D(id=np.int(id), inverse=False, 
                                    scale=[1,99], fcontam=2.,
                                    ref_wave = 1.05e4,
-                                   root=field+'-G102', 
-                                   search=field+'-*-*-G102', files=None, 
+                                   root='-G102', 
+                                   search='*-*-*-G102', files=None, 
                                    go=True, new_contam=False)
                 except:
                     continue
@@ -353,6 +376,9 @@ def cleanup_extractions(catname):
     in outputs named extractions_<catalog>_<ddMonthyyyy>.
 
     Parameters:
+        catname : string
+            Name of the catalog.
+
     """
 
     files = glob.glob('*1D*') + glob.glob('*2D*') + glob.glob('*stack*')
@@ -371,14 +397,39 @@ def cleanup_extractions(catname):
 #-------------------------------------------------------------------------------  
 #-------------------------------------------------------------------------------  
 
-if __name__=='__main__':
-    cats =  ['quiescent', 'steves']
-    fields = ['GN7', 'GDN7']  #['GS1', 'GS2', 'GS3', 'GS5', 'GN4', 'GN5', 'GN7']
+def clear_pipeline_main(fields, do_steps, catname):
+    """
+    """
+
     for field in fields:
         print "***Beginning field {}***".format(field)
         print ""
-        #interlace_clear(field=field)
-        #model_clear(field=field)
-        extract_clear(field=field, catname=cats[1])
-        stack_clear(field=field, catname=cats[1])
+        if 'GN' im fields:
+            for overlapping_field in overlapping_fields[field]:
+                print "***Beginning overlapping 13420 field {}***".format(overlapping_field)
+                print ""
+                if 1 in do_steps:
+                    interlace_clear(field=overlapping_field)
+                if 2 in do_steps:
+                    model_clear(field=overlapping_field)
+                if 3 in do_steps:
+                    extract_clear(field=overlapping_field, catname=catname)
+        else:
+            if 1 in do_steps:
+                interlace_clear(field=field)
+            if 2 in do_steps:
+                model_clear(field=field)
+            if 3 in do_steps:
+                extract_clear(field=field, catname=catname)      
+        
+        if 4 in do_steps:
+            stack_clear(field=field, catname=catname)    
+
+
+if __name__=='__main__':
+    cats =  ['quiescent', 'steves']
+    # Need to associate CLEAR pointings with 3DHST pointings.
+    fields = ['GN7']  #['GS1', 'GS2', 'GS3', 'GS5', 'GN4', 'GN5', 'GN7']
+    do_steps = [3,4]
+    clear_pipeline_main(fields=fields, do_steps=do_steps, catname=cats[0])
 
