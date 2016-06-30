@@ -17,6 +17,7 @@ from set_paths import paths
 # Define catalogs for S and N.
 quiescent_cats = {'S':'UVJ_quiescent_goodss.dat', 'N':'UVJ_quiescent_goodsn.dat'}
 steves_cats = {'S':'Steves_source_goodss_w_ids.dat', 'N':'Steves_source_goodsn_w_ids.dat'}
+ivas_cat = {'N':'Ivas_goodsn.dat'}
 
 ## Associate CLEAR pointings with overlapping 3DHST pointings.
 overlapping_fields = {'GN1':['GDN20'],
@@ -263,6 +264,8 @@ def extract_clear(field, catname):
         cat = steves_cats
     elif catname == 'quiescent':
         cat = quiescent_cats
+    elif catname == 'ivas':
+        cat = ivas_cat
     print "Chosen GS and GN catalogs: {}".format(cat)
 
     grism = glob.glob(field+'*G102_asn.fits')
@@ -329,6 +332,8 @@ def stack_clear(field, catname):
         cat = steves_cats
     elif catname == 'quiescent':
         cat = quiescent_cats
+    elif catname == 'ivas':
+        cat = ivas_cat
     print "Chosen GS and GN catalogs: {}".format(cat)
 
     grism = glob.glob(field+'*G102_asn.fits')
@@ -358,7 +363,7 @@ def stack_clear(field, catname):
                     spec = Stack2D(id=np.int(id), inverse=False, 
                                    scale=[1,99], fcontam=2.,
                                    ref_wave = 1.05e4,
-                                   root='-G102', 
+                                   root='{}-G102'.format(field), 
                                    search='*-*-*-G102', files=None, 
                                    go=True, new_contam=False)
                 except:
@@ -404,8 +409,11 @@ def clear_pipeline_main(fields, do_steps, catname):
     for field in fields:
         print "***Beginning field {}***".format(field)
         print ""
-        if 'GN' im fields:
-            for overlapping_field in overlapping_fields[field]:
+        if 'GN' in field:
+            # add primary CLEAR pointing to fields
+            overlapping_fields_all = overlapping_fields[field]
+            overlapping_fields_all.append(field)
+            for overlapping_field in overlapping_fields_all:
                 print "***Beginning overlapping 13420 field {}***".format(overlapping_field)
                 print ""
                 if 1 in do_steps:
@@ -427,9 +435,9 @@ def clear_pipeline_main(fields, do_steps, catname):
 
 
 if __name__=='__main__':
-    cats =  ['quiescent', 'steves']
+    cats =  ['quiescent', 'steves', 'ivas']
     # Need to associate CLEAR pointings with 3DHST pointings.
     fields = ['GN7']  #['GS1', 'GS2', 'GS3', 'GS5', 'GN4', 'GN5', 'GN7']
     do_steps = [3,4]
-    clear_pipeline_main(fields=fields, do_steps=do_steps, catname=cats[0])
+    clear_pipeline_main(fields=fields, do_steps=do_steps, catname=cats[2])
 
