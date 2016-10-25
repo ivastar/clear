@@ -1,9 +1,10 @@
 import os
 import glob
 import numpy as np
-import pyfits
+import astropy.io.fits as pyfits
 import shutil
 import time
+import zipfile
 
 import threedhst
 import unicorn
@@ -15,19 +16,29 @@ from find_pointing_start import find_pointing_start
 from set_paths import paths
 
 # Define catalogs for S and N.
-quiescent_cats = {'S':'UVJ_quiescent_goodss.dat', 'N':'UVJ_quiescent_goodsn.dat'}
-steves_cats = {'S':'Steves_source_goodss_w_ids.dat', 'N':'Steves_source_goodsn_w_ids.dat'}
-ivas_cat = {'N':'Ivas_goodsn.dat'}
+quiescent_cats = {'N' : ['UVJ_quiescent_goodsn.dat'], 
+                  'S' : ['UVJ_quiescent_goodss.dat'], 
+                  'name' : ['quiescent']}
+emitters_cats = {'N' : ['Steves_source_goodsn_w_ids.dat'], 
+                 'S' : ['Steves_source_goodss_w_ids.dat'], 
+                 'name' : ['emitters']}
+ivas_cat = {'N' : ['Ivas_goodsn.dat'], 
+            'name' : ['ivas']}
+plus_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]], 
+             'S' : ['added_sources_S_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]],
+             'name' : ['plus_z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
 
-## Associate CLEAR pointings with overlapping 3DHST pointings.
+all_cats = [quiescent_cats, emitters_cats, ivas_cat, plus_cats]
+
+## Associate CLEAR Goods-N pointings with overlapping 3DHST pointings.
 overlapping_fields = {'GN1':['GDN20'],
                       'GN2':['GDN8', 'GDN12', 'GDN21', 'GDN25'],
                       'GN3':['GDN18', 'GDN19', 'GDN22', 'GDN23'],
                       'GN4':['GDN21', 'GDN22', 'GDN25', 'GDN26'],
-                      'GN6':['GDN18', 'GDN17'],
+                      'GN5':['GDN17', 'GDN18'],
                       'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11']}
 
-
+#
 #-------------------------------------------------------------------------------  
 
 def prep_clear(field, make_asn = True, check_background = False, 
@@ -137,7 +148,7 @@ def interlace_clear(field):
     else:
         pad = 60
 
-    if 'GS' in field or 'GDS' in field:
+    if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
         CATALOG = path_to_REF + 'goodss_3dhst.v4.0.F125W_conv_fix.cat'
         REF_IMAGE = path_to_REF + 'goodss_3dhst.v4.0.F125W_orig_sci.fits'
         REF_EXT = 0
@@ -167,16 +178,27 @@ def interlace_clear(field):
             ref_exp=ref_exp, ref_image=REF_IMAGE, ref_ext=REF_EXT, 
             ref_filter=REF_FILTER, seg_image=SEG_IMAGE, 
             cat_file=CATALOG, grism='G102')     
+       
+        if 'GN5-42-346' in pointing:
+             # These stare images had a bad dither. Set to 1x1 binning.
+            print "Binning 1x1!"
+            growx=1
+            growy=1
+        else:
+            growx=2
+            growy=2 
+
         # Interlace the direct images. Set ref_exp to always be zero.                                                                             
         unicorn.reduce.interlace_combine(pointing.replace('G102','F105W'), 
             view=False, use_error=True, make_undistorted=False, pad=pad, 
             NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
-            growx=2, growy=2, auto_offsets=True, ref_exp=0)
+            growx=growx, growy=growy, auto_offsets=True, ref_exp=0)
         # Interlace the grism images.
         unicorn.reduce.interlace_combine(pointing, view=False, 
             use_error=True, make_undistorted=False, pad=pad, 
             NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
             growx=2, growy=2, auto_offsets=True, ref_exp=ref_exp)
+
 
 
     print "*** interlace_clear step complete ***"
@@ -240,7 +262,7 @@ def model_clear(field):
 
 #-------------------------------------------------------------------------------  
 
-def extract_clear(field, catname):
+def extract_clear(field, tab):
     """
 
     ** Step 3. of Interlace steps. **
@@ -249,30 +271,19 @@ def extract_clear(field, catname):
     Parameters:
         field : string
             The GOODS field to process. 
-        catname : string
-            Name of the catalog.
+        tab : dictionary
+            Values for each source.
 
     Checks:
         *2D.png should show some extracted spectra (most may be empty)
 
-
     """  
-    #ids = [37945,38822,39286,39411]
-    path_to_REF = paths['path_to_ref_files'] + 'REF/'
-
-    if catname == 'steves':
-        cat = steves_cats
-    elif catname == 'quiescent':
-        cat = quiescent_cats
-    elif catname == 'ivas':
-        cat = ivas_cat
-    print "Chosen GS and GN catalogs: {}".format(cat)
 
     grism = glob.glob(field+'*G102_asn.fits')
-    if 'GS' in field or 'GDS' in field:
-        tab = Table.read(path_to_REF + cat['S'], format='ascii')
-    elif 'GN' in field or 'GDN' in field:
-        tab = Table.read(path_to_REF + cat['N'], format='ascii')
+    #if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
+    #    tab = Table.read(path_to_REF + cat['S'], format='ascii')
+    #elif 'GN' in field or 'GDN' in field:
+    #    tab = Table.read(path_to_REF + cat['N'], format='ascii')
 
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
@@ -300,15 +311,20 @@ def extract_clear(field, catname):
 
 #-------------------------------------------------------------------------------  
 
-def stack_clear(field, catname):
+def stack_clear(field, tab, cat, catname):
     """
 
     Parameters:
         field : string
             The GOODS field to process. Needs to know to reference GN or GS 
             catalog.
+        tab : dictionary
+            Values for each source.
+        cat : dictionary
+            Keys are 'N' or 'S' and values are the string names of 
+            the catalog files.
         catname : string
-            Name of the catalog.
+            Name of the catalog, for naming output directory.
 
     Checks:
         In *stack.png check that the contam models reasonably match actual
@@ -323,24 +339,13 @@ def stack_clear(field, catname):
     # Need a function that knows to search over all correlating 3dHST pointings
     # when given a specific CLEAR pointing.
 
-    import os
     from unicorn.hudf import Stack2D
- 
-    path_to_REF = paths['path_to_ref_files'] + 'REF/'
-    
-    if catname == 'steves':
-        cat = steves_cats
-    elif catname == 'quiescent':
-        cat = quiescent_cats
-    elif catname == 'ivas':
-        cat = ivas_cat
-    print "Chosen GS and GN catalogs: {}".format(cat)
 
     grism = glob.glob(field+'*G102_asn.fits')
-    if 'GS' in field or 'GDS' in field:
-        tab = Table.read(path_to_REF + cat['S'], format='ascii')
-    elif 'GN' in field or 'GDN' in field:
-        tab = Table.read(path_to_REF + cat['N'], format='ascii')
+    #if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
+    #    tab = Table.read(path_to_REF + cat['S'], format='ascii')
+    #elif 'GN' in field or 'GDN' in field:
+    #    tab = Table.read(path_to_REF + cat['N'], format='ascii')
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(root=root, 
@@ -369,27 +374,38 @@ def stack_clear(field, catname):
                 except:
                     continue
 
-    cleanup_extractions(catname=catname)
+    cleanup_extractions(field=field, cat=cat, catname=catname)
 
     print "*** stack_clear step complete ***"
     
 
 #------------------------------------------------------------------------------- 
 
-def cleanup_extractions(catname):
-    """ Moves all *1D*, *2D*, and *stack* files to a sub-directory
-    in outputs named extractions_<catalog>_<ddMonthyyyy>.
+def cleanup_extractions(field, cat, catname):
+    """ Moves all *1D*, *2D*, and *stack* files to a directory in Extractions
+    named /<field>/<catalog>_yyyy-mm-dd/.
+    Then tars the directory in Extractions.
 
     Parameters:
+        field : string
+            The GOODS field to process. Needs to know to reference GN or GS 
+            catalog.
+        cat : dictionary
+            Keys are 'N' or 'S' and values are the string names of 
+            the catalog files.
         catname : string
-            Name of the catalog.
+            Name of the catalog, for naming output directory.
 
     """
+    path_to_Extractions = paths['path_to_Extractions']
 
     files = glob.glob('*1D*') + glob.glob('*2D*') + glob.glob('*stack*')
     print files
 
-    dirname = 'extractions_{}_{}'.format(catname, time.strftime('%d%B%Y'))
+    dirname = os.path.join(path_to_Extractions, field, '{}_{}'.format(catname, 
+        time.strftime('%Y-%m-%d')))
+
+    #dirname = 'extractions_{}_{}'.format(catname, time.strftime('%d%B%Y'))
     if not os.path.isdir(dirname):
         os.mkdir(dirname)
 
@@ -398,46 +414,67 @@ def cleanup_extractions(catname):
     for f in files:
         shutil.move(f, os.path.join(dirname,f))
 
+    # Now tar the directory.
+    shutil.make_archive(os.path.join(path_to_Extractions, field, '{}_extractions_{}'.format(field, catname)), 
+        'gztar', dirname)
+
 
 #-------------------------------------------------------------------------------  
 #-------------------------------------------------------------------------------  
 
-def clear_pipeline_main(fields, do_steps, catname):
+def clear_pipeline_main(fields, do_steps, cats):
     """
     """
+    path_to_REF = paths['path_to_ref_files'] + 'REF/'
 
     for field in fields:
         print "***Beginning field {}***".format(field)
         print ""
-        if 'GN' in field:
-            # add primary CLEAR pointing to fields
-            overlapping_fields_all = overlapping_fields[field]
-            overlapping_fields_all.append(field)
-            for overlapping_field in overlapping_fields_all:
-                print "***Beginning overlapping 13420 field {}***".format(overlapping_field)
-                print ""
+
+        # Choose the field for the catalogs, where the catalog options include emitters and quiescent.
+        if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
+            cats_field = cats['S']
+        elif 'GN' in field or 'GDN' in field:
+            cats_field = cats['N']
+
+        for cat, catname in zip(cats_field, cats['name']):
+            print "***Beginning catalog {}***".format(cat)
+            print ""
+
+            if 'GN' in field:
+                # add primary CLEAR pointing to fields
+                overlapping_fields_all = overlapping_fields[field]
+                overlapping_fields_all.append(field)
+                for overlapping_field in overlapping_fields_all:
+                    print "***Beginning overlapping 13420 field {}***".format(overlapping_field)
+                    print ""
+                    if 1 in do_steps:
+                        interlace_clear(field=overlapping_field)
+                    if 2 in do_steps:
+                        model_clear(field=overlapping_field)
+                    if 3 in do_steps:
+                        tab = Table.read(path_to_REF + cat, format='ascii')
+                        extract_clear(field=overlapping_field, tab=tab)
+
+            else:
                 if 1 in do_steps:
-                    interlace_clear(field=overlapping_field)
+                    interlace_clear(field=field)
                 if 2 in do_steps:
-                    model_clear(field=overlapping_field)
+                    model_clear(field=field)
+
                 if 3 in do_steps:
-                    extract_clear(field=overlapping_field, catname=catname)
-        else:
-            if 1 in do_steps:
-                interlace_clear(field=field)
-            if 2 in do_steps:
-                model_clear(field=field)
-            if 3 in do_steps:
-                extract_clear(field=field, catname=catname)      
+                    tab = Table.read(path_to_REF + cat, format='ascii')
+                    extract_clear(field=field, tab=tab)
+                
+            if 4 in do_steps:
+                stack_clear(field=field, tab=tab, cat=cat, catname=catname) 
         
-        if 4 in do_steps:
-            stack_clear(field=field, catname=catname)    
 
 
 if __name__=='__main__':
-    cats =  ['quiescent', 'steves', 'ivas']
-    # Need to associate CLEAR pointings with 3DHST pointings.
-    fields = ['GN7']  #['GS1', 'GS2', 'GS3', 'GS5', 'GN4', 'GN5', 'GN7']
+    # all_cats = [quiescent_cats, emitters_cats, ivas_cat, plus_cats]
+    fields = ['ERSPRIME'] 
+    # Steps 3 and 3 should always be done together (the output directory will be messed up otherwise)
     do_steps = [3,4]
-    clear_pipeline_main(fields=fields, do_steps=do_steps, catname=cats[2])
+    clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0])
 

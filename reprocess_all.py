@@ -127,6 +127,23 @@ def reprocess_all(visits=[]):
             elif 'icat11c2q' in rawname:
                 # 3DHST, CR thing
                 pop_reads=[6]
+            elif 'icxt27hhq' in rawname:
+                # Dispersed satellite trail. Possibly persisting into next read.
+                pop_reads=[3]
+            elif 'icxt64qvq' in rawname:
+                # Dispersed satellite trail.
+                pop_reads=[7]
+            elif 'icxt50i1q' in rawname:
+                # Satellite trail.
+                pop_reads=[12]
+            elif 'icxt50hwq' in rawname:
+                # Satellite trail.
+                pop_reads=[3]
+            elif 'icxt61gzq' in rawname:
+                # Satellite trail?
+                pop_reads=[4]
+            elif 'icxt61gwq' in rawname:
+                pop_reads=[5,6,7,8,9,10,11]
 
             reprocess_wfc3.make_IMA_FLT(raw=rawname, pop_reads=pop_reads)
 

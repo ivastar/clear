@@ -6,6 +6,10 @@ Gzips all the original FLTs and moves them to 'flt_zipped' directory.
 
 *Step 1 of Prep.*
 
+Authors:
+    
+    C.M. Gosmeyer, Mar. 2016
+
 Use:
     
     Be in the RAW directory.
@@ -14,13 +18,9 @@ Use:
 
     --v : the visit number.
 
-Authors:
-    
-    C.M. Gosmeyer, Mar. 2016
-
 Example:
 
-    >>> python check_all.py --v 44 05
+    >>> python retrieve_all.py --v 44 05
 
 """
 
@@ -30,7 +30,7 @@ import os
 import shutil
 import subprocess
 
-from clear.set_paths import paths
+from set_paths import paths
 
 
 #-------------------------------------------------------------------------------  
@@ -41,7 +41,8 @@ def make_filesinfo():
     # Retain the old files.info. User can delete if desired.
     path_to_RAW = paths['path_to_RAW']
     path_to_software = paths['path_to_software']
-    os.rename(path_to_RAW + 'files.info', path_to_RAW + 'files.info.retain')
+    if os.path.isfile(path_to_RAW + 'files.info'):
+        os.rename(path_to_RAW + 'files.info', path_to_RAW + 'files.info.retain')
     cwd = os.getcwd()
 
     os.chdir('{}threedhst/threedhst/bin/'.format(path_to_software))
@@ -109,9 +110,10 @@ def retrieve_all(visits=[], overwrite=True):
                 print "Copying {}.".format(persist)
         
     # Move all *flt.fits.gz to flt_zipped dir.
-    gzip_list = glob.glob(path_to_RAW + '*flt.fits.gz')
-    for gzip in gzip_list:
-        shutil.move(gzip, path_to_RAW + 'flt_zipped/')
+    #(turning off for now because align_all.py wants them in main dir now...)
+    #gzip_list = glob.glob(path_to_RAW + '*flt.fits.gz')
+    #for gzip in gzip_list:
+    #    shutil.move(gzip, path_to_RAW + 'flt_zipped/')
 
     make_filesinfo()
 
@@ -153,3 +155,4 @@ if __name__=="__main__":
     visits = args.visits
 
     retrieve_all(visits=visits)
+    make_filesinfo()

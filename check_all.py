@@ -32,7 +32,7 @@ Use:
 
     >>> python check_all.py --v (optional)
 
-    --v : 
+    --v : the visit number.
 
 Authors:
     
