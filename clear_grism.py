@@ -1,10 +1,30 @@
+""" Module containing all wrapper functions to run CLEAR interlacing and extractions.
+
+Here listing the Program 14227 visits contained in each field. 
+
+ERSPRIME: 19, 20, 21, 22, 23
+GS1: 07, 08, 09, 10, 11, 12
+GS2: 01, 02, 03, 04, 05, 06
+GS3: 30, 31, 32, 33, 34, 35
+GS4: 24, 25, 26, 27, 28, 29
+GS5: 13, 14, 15, 16, 17, 18
+GN1: 46, 47, 48, 49, 50
+GN2: 51, 52, 53, 54 (A4), 55
+GN3: 56, 57, 58, 59, 60
+GN4: 61, 62, 63, 64, 65
+GN5: 41, 42, 43, 44, 45
+GN7: 36, 37, 38, 39, 40
+
+GN6 is a myth
+"""
+
+
 import os
 import glob
 import numpy as np
 import astropy.io.fits as pyfits
 import shutil
 import time
-import zipfile
 
 import threedhst
 import unicorn
@@ -24,11 +44,11 @@ emitters_cats = {'N' : ['Steves_source_goodsn_w_ids.dat'],
                  'name' : ['emitters']}
 ivas_cat = {'N' : ['Ivas_goodsn.dat'], 
             'name' : ['ivas']}
-plus_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]], 
+zn_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]], 
              'S' : ['added_sources_S_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]],
-             'name' : ['plus_z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
+             'name' : ['z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
 
-all_cats = [quiescent_cats, emitters_cats, ivas_cat, plus_cats]
+all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
 
 ## Associate CLEAR Goods-N pointings with overlapping 3DHST pointings.
 overlapping_fields = {'GN1':['GDN20'],
@@ -149,16 +169,16 @@ def interlace_clear(field):
         pad = 60
 
     if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
-        CATALOG = path_to_REF + 'goodss_3dhst.v4.0.F125W_conv_fix.cat'
-        REF_IMAGE = path_to_REF + 'goodss_3dhst.v4.0.F125W_orig_sci.fits'
+        CATALOG = path_to_REF + 'GoodsS_plus_merged.cat' #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
+        REF_IMAGE = path_to_REF + 'gs_all_candels_ers_udf_f105w_060mas_v0.5_drz.trim.fits' #'goodss_3dhst.v4.0.F125W_orig_sci.fits'
         REF_EXT = 0
-        SEG_IMAGE = path_to_REF + 'goodss_3dhst.v4.0.F160W_seg.fits'
+        SEG_IMAGE = path_to_REF + 'Goods_S_plus_seg.fits' #'goodss_3dhst.v4.0.F160W_seg.fits'
 
     elif 'GN' in field or 'GDN' in field:
-        CATALOG = path_to_REF + 'goodsn_3dhst.v4.0.F125W_conv.cat'
-        REF_IMAGE = path_to_REF + 'goodsn_3dhst.v4.0.F125W_orig_sci.fits'
+        CATALOG = path_to_REF + 'GoodsN_plus_merged.cat' #'goodsn_3dhst.v4.0.F125W_conv.cat'
+        REF_IMAGE = path_to_REF + 'gn_all_candels_wfc3_f105w_060mas_v0.8_drz.fits' #'goodsn_3dhst.v4.0.F125W_orig_sci.fits'
         REF_EXT = 0
-        SEG_IMAGE = path_to_REF + 'goodsn_3dhst.v4.0.F160W_seg.fits'
+        SEG_IMAGE = path_to_REF + 'Goods_N_plus_seg.fits' #'goodsn_3dhst.v4.0.F160W_seg.fits'
 
     REF_FILTER = 'F125W'
 
@@ -241,16 +261,19 @@ def model_clear(field):
         field : string
             The GOODS field to process. 
     """
-    grism = glob.glob(field+'*G102_asn.fits')
+    grism_asn = glob.glob(field+'*G102_asn.fits')
     
-    for i in range(len(grism)):
-        root = grism[i].split('-G102')[0]
-        #m0 = unicorn.reduce.GrismModel(root='goodss-01')
-        #model_list = m0.get_eazy_templates(dr_min=0.5, MAG_LIMIT=25)
+    for i in range(len(grism_asn)):
+        root = grism_asn[i].split('-G102')[0]
+        direct = 'F105W'
+        grism = 'G102'
+        m0 = unicorn.reduce.GrismModel(root=root, direct=direct, grism=grism)
+        model_list = m0.get_eazy_templates(dr_min=0.5, MAG_LIMIT=25)
         model = unicorn.reduce.process_GrismModel(root=root, 
+            model_list=model_list,
             grow_factor=2, growx=2, growy=2, MAG_LIMIT=24, 
             REFINE_MAG_LIMIT=21, make_zeroth_model=False, use_segm=False, 
-            model_slope=0, direct='F105W', grism='G102', 
+            model_slope=0, direct=direct, grism=grism, 
             BEAMS=['A', 'B', 'C', 'D','E'], align_reference=False)
         if not os.path.exists(os.path.basename(model.root) + '-G102_maskbg.dat'):
             model.refine_mask_background(threshold=0.002, grow_mask=14, 
@@ -292,7 +315,16 @@ def extract_clear(field, tab):
             REFINE_MAG_LIMIT=21, make_zeroth_model=False, 
             use_segm=False, model_slope=0, direct='F105W', grism='G102', 
             BEAMS=['A', 'B', 'C', 'D','E'], align_reference=False)
-        for id in [id for id in tab['ID'] if id in model.cat.id]:
+        try:
+            ids = tab['ID']
+        except:
+            # Needed for the 'plux_z*' catalogs.
+            ids_raw = tab['id']
+            ids = []
+            for id in ids_raw:
+                ids.append(id.split('_')[-1])
+
+        for id in [id for id in ids if id in model.cat.id]:
             try:
                 model.twod_spectrum(id=id, grow=1, miny=-36, maxy=None, 
                                     CONTAMINATING_MAGLIMIT=23, 
@@ -359,7 +391,16 @@ def stack_clear(field, tab, cat, catname):
                                                   grism='G102', 
                                                   BEAMS=['A', 'B', 'C', 'D','E'],
                                                   align_reference=False)
-        for id in tab['ID']:
+        try:
+            ids = tab['ID']
+        except:
+            # Needed for the 'plux_z*' catalogs.
+            ids_raw = tab['id']
+            ids = []
+            for id in ids_raw:
+                ids.append(id.split('_')[-1])
+
+        for id in ids:
             if (id in model.cat.id):
                 #and (not os.path.exists(field+'-G102_{}.2D.fits'.format(id))):
                 try:
@@ -415,7 +456,7 @@ def cleanup_extractions(field, cat, catname):
         shutil.move(f, os.path.join(dirname,f))
 
     # Now tar the directory.
-    shutil.make_archive(os.path.join(path_to_Extractions, field, '{}_extractions_{}'.format(field, catname)), 
+    shutil.make_archive(os.path.join(path_to_Extractions, field, '{}_extractions_{}_plus'.format(field, catname)), 
         'gztar', dirname)
 
 
@@ -472,9 +513,9 @@ def clear_pipeline_main(fields, do_steps, cats):
 
 
 if __name__=='__main__':
-    # all_cats = [quiescent_cats, emitters_cats, ivas_cat, plus_cats]
+    # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
     fields = ['ERSPRIME'] 
     # Steps 3 and 3 should always be done together (the output directory will be messed up otherwise)
-    do_steps = [3,4]
+    do_steps = [1,2]
     clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0])
 

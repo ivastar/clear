@@ -143,7 +143,11 @@ def reprocess_all(visits=[]):
                 # Satellite trail?
                 pop_reads=[4]
             elif 'icxt61gwq' in rawname:
+                # Earth shine
                 pop_reads=[5,6,7,8,9,10,11]
+            elif 'icxt47xcq' in rawname:
+                # Satellite trail.
+                pop_reads=[9]
 
             reprocess_wfc3.make_IMA_FLT(raw=rawname, pop_reads=pop_reads)
 
