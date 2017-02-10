@@ -107,7 +107,7 @@ def align_all(visits=[], make_asn = False, program=14227):
     print paths
     print visits
 
-    shutil.copy('../RAW/files.info', 'files.info')
+    #shutil.copy('../RAW/files.info', 'files.info')
     cleanup_outputs()
     fetch_gz(visits)
 
@@ -126,7 +126,7 @@ def align_all(visits=[], make_asn = False, program=14227):
     for direct in direct_files:
         # Check that not accidently looping over a program 13420 visit if
         # processing a 14227 visit of same number.
-        if program == 14227 and 'GDN' not in direct:
+        if (program == 14227 and 'GDN' not in direct) or (program == 13420):
             grism = direct.replace('F105W', 'G102')
             print " "
             print direct, grism
@@ -175,7 +175,7 @@ def parse_args():
     """
 
     visits_help = "List of visits to loop over. Default is to loop over all."
-    program_help = "Set to specific program so doing correct visits. Wither 14227 or 13420"
+    program_help = "Set to specific program so doing correct visits. Either 14227 or 13420"
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--v', dest = 'visits',
@@ -197,6 +197,6 @@ if __name__=="__main__":
     args = parse_args()
 
     visits = args.visits
-    program = args.program
+    program = int(args.program)
 
     align_all(visits=visits, make_asn = True, program=program)

@@ -48,7 +48,7 @@ zn_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6
              'S' : ['added_sources_S_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]],
              'name' : ['z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
 
-all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
+all_cats = [quiescent_cats, emitters_cats, zn_cats] #, ivas_cat]
 
 ## Associate CLEAR Goods-N pointings with overlapping 3DHST pointings.
 overlapping_fields = {'GN1':['GDN20'],
@@ -113,7 +113,7 @@ def prep_clear(field, make_asn = True, check_background = False,
 
 #-------------------------------------------------------------------------------  
 
-def interlace_clear(field):
+def interlace_clear(field, ref_filter):
     """
     ** Step 1. of Interlace steps. **
 
@@ -153,6 +153,8 @@ def interlace_clear(field):
     Parameters:
         field : string
             The GOODS field to process. 
+        ref_filter : string
+            Filter of the reference image.
     """
 
     print "Processing field {}".format(field)
@@ -168,19 +170,39 @@ def interlace_clear(field):
     else:
         pad = 60
 
-    if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
+
+    if 'ERSPRIME' in field:
+        # ersprime does not appear on the smaller F105W GS reference image. So continue to use F125W's GS ref image.
         CATALOG = path_to_REF + 'GoodsS_plus_merged.cat' #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
-        REF_IMAGE = path_to_REF + 'gs_all_candels_ers_udf_f105w_060mas_v0.5_drz.trim.fits' #'goodss_3dhst.v4.0.F125W_orig_sci.fits'
+        REF_IMAGE = path_to_REF + 'goodss_3dhst.v4.0.F125W_orig_sci.fits'
         REF_EXT = 0
         SEG_IMAGE = path_to_REF + 'Goods_S_plus_seg.fits' #'goodss_3dhst.v4.0.F160W_seg.fits'
+        REF_FILTER = 'F125W'
+
+    elif 'GS' in field or 'GDS' in field:
+        CATALOG = path_to_REF + 'GoodsS_plus_merged.cat' #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
+        # F105W ref image only works for GS3 and GS4.
+        REF_EXT = 0
+        SEG_IMAGE = path_to_REF + 'Goods_S_plus_seg.fits' #'goodss_3dhst.v4.0.F160W_seg.fits'
+        if ref_filter == 'F125W':
+            REF_IMAGE = path_to_REF + 'goodss_3dhst.v4.0.F125W_orig_sci.fits'  
+            REF_FILTER = 'F125W'
+        elif ref_filter == 'F105W':
+            REF_IMAGE = path_to_REF + 'gs_all_candels_ers_udf_f105w_060mas_v0.5_drz.trim.fits'
+            REF_FILTER = 'F105W'
 
     elif 'GN' in field or 'GDN' in field:
         CATALOG = path_to_REF + 'GoodsN_plus_merged.cat' #'goodsn_3dhst.v4.0.F125W_conv.cat'
-        REF_IMAGE = path_to_REF + 'gn_all_candels_wfc3_f105w_060mas_v0.8_drz.fits' #'goodsn_3dhst.v4.0.F125W_orig_sci.fits'
         REF_EXT = 0
         SEG_IMAGE = path_to_REF + 'Goods_N_plus_seg.fits' #'goodsn_3dhst.v4.0.F160W_seg.fits'
+        if ref_filter == 'F125W':
+            REF_IMAGE = path_to_REF + 'goodsn_3dhst.v4.0.F125W_orig_sci.fits'
+            REF_FILTER = 'F125W'
+        elif ref_filter == 'F105W':
+            REF_IMAGE = path_to_REF + 'gn_all_candels_wfc3_f105w_060mas_v0.8_drz.fits'
+            REF_FILTER = 'F105W'
 
-    REF_FILTER = 'F125W'
+
 
     grism = glob.glob(field+'*G102_asn.fits')
     print "grism: {}".format(grism)
@@ -343,7 +365,7 @@ def extract_clear(field, tab):
 
 #-------------------------------------------------------------------------------  
 
-def stack_clear(field, tab, cat, catname):
+def stack_clear(field, tab, cat, catname, ref_filter):
     """
 
     Parameters:
@@ -357,6 +379,8 @@ def stack_clear(field, tab, cat, catname):
             the catalog files.
         catname : string
             Name of the catalog, for naming output directory.
+        ref_filter : string
+            Filter of the reference image.
 
     Checks:
         In *stack.png check that the contam models reasonably match actual
@@ -415,14 +439,14 @@ def stack_clear(field, tab, cat, catname):
                 except:
                     continue
 
-    cleanup_extractions(field=field, cat=cat, catname=catname)
+    cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
 
     print "*** stack_clear step complete ***"
     
 
 #------------------------------------------------------------------------------- 
 
-def cleanup_extractions(field, cat, catname):
+def cleanup_extractions(field, cat, catname, ref_filter):
     """ Moves all *1D*, *2D*, and *stack* files to a directory in Extractions
     named /<field>/<catalog>_yyyy-mm-dd/.
     Then tars the directory in Extractions.
@@ -436,6 +460,8 @@ def cleanup_extractions(field, cat, catname):
             the catalog files.
         catname : string
             Name of the catalog, for naming output directory.
+        ref_filter : string
+            Filter of the reference image.
 
     """
     path_to_Extractions = paths['path_to_Extractions']
@@ -443,7 +469,7 @@ def cleanup_extractions(field, cat, catname):
     files = glob.glob('*1D*') + glob.glob('*2D*') + glob.glob('*stack*')
     print files
 
-    dirname = os.path.join(path_to_Extractions, field, '{}_{}'.format(catname, 
+    dirname = os.path.join(path_to_Extractions, field, '{}_{}_{}'.format(catname, ref_filter,
         time.strftime('%Y-%m-%d')))
 
     #dirname = 'extractions_{}_{}'.format(catname, time.strftime('%d%B%Y'))
@@ -456,14 +482,14 @@ def cleanup_extractions(field, cat, catname):
         shutil.move(f, os.path.join(dirname,f))
 
     # Now tar the directory.
-    shutil.make_archive(os.path.join(path_to_Extractions, field, '{}_extractions_{}_plus'.format(field, catname)), 
+    shutil.make_archive(os.path.join(path_to_Extractions, field, '{}_extractions_{}_{}_plus'.format(field, catname, ref_filter)), 
         'gztar', dirname)
 
 
 #-------------------------------------------------------------------------------  
 #-------------------------------------------------------------------------------  
 
-def clear_pipeline_main(fields, do_steps, cats):
+def clear_pipeline_main(fields, do_steps, cats, ref_filter):
     """
     """
     path_to_REF = paths['path_to_ref_files'] + 'REF/'
@@ -490,7 +516,7 @@ def clear_pipeline_main(fields, do_steps, cats):
                     print "***Beginning overlapping 13420 field {}***".format(overlapping_field)
                     print ""
                     if 1 in do_steps:
-                        interlace_clear(field=overlapping_field)
+                        interlace_clear(field=overlapping_field, ref_filter=ref_filter)
                     if 2 in do_steps:
                         model_clear(field=overlapping_field)
                     if 3 in do_steps:
@@ -499,7 +525,7 @@ def clear_pipeline_main(fields, do_steps, cats):
 
             else:
                 if 1 in do_steps:
-                    interlace_clear(field=field)
+                    interlace_clear(field=field, ref_filter=ref_filter)
                 if 2 in do_steps:
                     model_clear(field=field)
 
@@ -508,14 +534,19 @@ def clear_pipeline_main(fields, do_steps, cats):
                     extract_clear(field=field, tab=tab)
                 
             if 4 in do_steps:
-                stack_clear(field=field, tab=tab, cat=cat, catname=catname) 
+                stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter) 
         
 
 
 if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
-    fields = ['ERSPRIME'] 
-    # Steps 3 and 3 should always be done together (the output directory will be messed up otherwise)
+    fields = ['GS5'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
+    ref_filter = 'F125W'
+    # Steps 3 and 4 should always be done together (the output directory will be messed up
+    # if otherwise ran another extraction catalog through 3 first.)
     do_steps = [1,2]
-    clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0])
+    clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
+    do_steps = [3,4]
+    for cat in all_cats:
+        clear_pipeline_main(fields=fields, do_steps=do_steps, cats=cat, ref_filter=ref_filter)
 

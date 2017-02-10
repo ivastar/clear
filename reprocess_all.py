@@ -110,8 +110,8 @@ def reprocess_all(visits=[]):
                 # Satelite?
                 pop_reads=[1]
             elif 'icxt16jzq' in rawname:
-                # CR explosion?
-                pop_reads=[6]
+                # CR explosion in 6. 
+                pop_reads=[5,6]
             elif 'icxt01ciq' in rawname:
                 # Satelite
                 pop_reads=[9]
@@ -148,6 +148,10 @@ def reprocess_all(visits=[]):
             elif 'icxt47xcq' in rawname:
                 # Satellite trail.
                 pop_reads=[9]
+            elif 'icxt57anq' in rawname:
+                # Satellite trail possibly flagged as zeroth read signal.
+                # See also icxt38pdq (which occurred in early visit so needed make a mask)
+                pop_reads=[9, 10]
 
             reprocess_wfc3.make_IMA_FLT(raw=rawname, pop_reads=pop_reads)
 
