@@ -135,7 +135,7 @@ def align_all(visits=[], make_asn = False, program=14227):
             #    visit = int(grism.split('-')[1])
             #else:
             #    visit = int(grism[4:6])
-            visit = int(grism.split('-')[1])
+            visit = (grism.split('-')[1]).lower()
             print "Visit: {}".format(visit)
 
             # Only reprocess the visits in the list, or reprocess
@@ -179,7 +179,7 @@ def parse_args():
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--v', dest = 'visits',
-                        action = 'store', type = int, required = False,
+                        action = 'store', type = str, required = False,
                         help = visits_help, nargs='+', default=[])       
     parser.add_argument('--pr', dest = 'program',
                         action = 'store', type = int, required = False,

@@ -71,7 +71,7 @@ def retrieve_all(visits=[], overwrite=True):
 
     for visit_dir in visit_dirs:
        
-        visit = int(((visit_dir.split('/'))[len(visit_dir.split('/'))-1])[5:7])
+        visit = ((visit_dir.split('/'))[len(visit_dir.split('/'))-1])[5:7]
         print "Visit: {}".format(visit)
 
         # Only retrieve the visits in the list, or reprocess
@@ -138,7 +138,7 @@ def parse_args():
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--v', dest = 'visits',
-                        action = 'store', type = int, required = False,
+                        action = 'store', type = str, required = False,
                         help = visits_help, nargs='+', default=[])       
     args = parser.parse_args()
      

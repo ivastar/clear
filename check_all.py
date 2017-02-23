@@ -87,7 +87,7 @@ def check_all(visits=[]):
     for filename in filenames:
     	imaname = (filename.split('_flt'))[0] + '_ima.fits'
         print "IMA name: {}".format(imaname)
-        visit = int(imaname[4:6])
+        visit = imaname[4:6]
         print "Visit: {}".format(visit)
 
         if ((visits != []) and (visit in visits)) or (visits == []):
@@ -120,7 +120,7 @@ def parse_args():
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--v', dest = 'visits',
-                        action = 'store', type = int, required = False,
+                        action = 'store', type = str, required = False,
                         help = visits_help, nargs='+', default=[])       
     args = parser.parse_args()
      

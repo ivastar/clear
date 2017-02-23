@@ -540,7 +540,7 @@ def clear_pipeline_main(fields, do_steps, cats, ref_filter):
 
 if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
-    fields = ['GS5'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
+    fields = ['GN2'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
     ref_filter = 'F125W'
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)

@@ -87,7 +87,7 @@ def reprocess_all(visits=[]):
     for filename in filenames:
         print "Filename: {}".format(filename)
         pop_reads=[]
-        visit = int(filename[4:6])
+        visit = filename[4:6]
         print "Visit: {}".format(visit)
         # Only reprocess the visits in the list, or reprocess
         # everything if the list is empty.
@@ -176,7 +176,7 @@ def parse_args():
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--v', dest = 'visits',
-                        action = 'store', type = int, required = False,
+                        action = 'store', type = str, required = False,
                         help = visits_help, nargs='+', default=[])       
     args = parser.parse_args()
      
