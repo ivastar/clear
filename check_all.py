@@ -1,12 +1,17 @@
 #! /usr/bin/env python
 
 """Module to create diagnostic PNGs for checking ramps in a visit or 
-subset of visits. If find bad reads, will need to mark them to be popped 
-in :mod:`reprocess_all.py`.
-For earth-flat persistence, will need to create masks.
-Also very good idea to flip through JPGs from QL or just DS9 the FLT!
+subset of visits. 
 
 *Step 2 of Prep.*
+
+Checks:
+
+    Flip through the PNGs. If bad reads found, you will need to mark them 
+    to be popped in :mod:`reprocess_all.py`.
+    For earth-flat persistence, or any anamoly that affects all the reads,
+    will need to create masks.
+
 
 HOW TO CREATE MASKS
 ++++++++++++++++++++
@@ -40,10 +45,7 @@ Authors:
 
 Example:
 
-    >>> python check_all.py --v 44 05
-
-Outputs:
-
+    >>> python check_all.py --v 44 05 A4
 
 """
 
@@ -62,7 +64,15 @@ from mywfc3 import reprocess_wfc3
 #-------------------------------------------------------------------------------  
 
 def read_filesinfo():
-    """ Assumes in RAW directory.
+    """ Reads in the "files.info" file. Assumes you are in the RAW directory.
+
+    Returns
+    -------
+    files : numpy array
+        Names of the FLT files.
+    filters : numpy array
+        Names the files' filters. 
+
     """
     if os.path.isfile('files.info'):
         
@@ -78,7 +88,16 @@ def read_filesinfo():
 #-------------------------------------------------------------------------------  
 
 def check_all(visits=[]):
-    """
+    """ Creates diagonstic PNGs of the ramps of each file in the given visits.
+    To be used for searching for satellite trails, earth-limb, etc., so can 
+    either pop the read (if affects single read) or create a mask (if affects
+    all the reads). 
+
+    Parameters
+    ----------
+    visits : list of ints/strings
+        The two-digit numbers of the visits whose observations' ramps will 
+        be printed to PNGs. e.g., [01, 11, 'a4']    
     """
     print visits
     # First read in the filelist. 
@@ -104,16 +123,11 @@ def check_all(visits=[]):
 
 def parse_args():
     """Parses command line arguments.
-    
-    Parameters:
-        nothing
         
-    Returns:
-        args : object
-            Containing the image and destination arguments.
-            
-    Outputs:
-        nothing.
+    Returns
+    -------
+    args : object
+        Containing the image and destination arguments.
     """
 
     visits_help = "List of visits to loop over. Default is to loop over all."

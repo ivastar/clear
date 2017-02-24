@@ -6,13 +6,15 @@ rays, and subtracts background.
 For the grisms, it does a more complicated background subtraction (see 
 Gabe's ISR). If persistence files available, it will mask the affected 
 pixels.
-When it is complete, should look at all the FLTs. They all should be 
-flatfielded, have background substracted (so average is about 0). No 
-cartwheel should be visible (but Deathstar still there). No streaks. 
-No gradients.
-
 
 *Step 4 of Prep.*
+
+Checks:
+
+    When it is complete, should look at all the FLTs. They all should be 
+    flatfielded, have background substracted (so average is about 0). No 
+    cartwheel should be visible (but Deathstar still there). No streaks. 
+    No gradients.
 
 Use:
     
@@ -28,9 +30,7 @@ Authors:
 
 Example:
 
-    >>> python align_all.py --v 44 05
-
-Outputs:
+    >>> python align_all.py --v 44 05 A4
 
 Notes:
 
@@ -101,8 +101,20 @@ def fetch_gz(visits):
 #-------------------------------------------------------------------------------  
 
 def align_all(visits=[], make_asn = False, program=14227):
-    """
-    The catalog for ERSPRIME is South.
+    """ Aligns all observations in the given visits. In addition, flags 
+    cosmic rays, and subtracts background.
+
+    Parameters
+    ----------
+    visits : list of ints/strings
+        The two-digit numbers of the visits to be aligned. e.g., 
+        [01, 11, 'a4']    
+
+    mask_asn : {True, False}
+        Turn on to create association file. 
+
+    program : int
+        Number of the program.
     """
     print paths
     print visits
@@ -162,16 +174,11 @@ def align_all(visits=[], make_asn = False, program=14227):
 
 def parse_args():
     """Parses command line arguments.
-    
-    Parameters:
-        nothing
         
-    Returns:
-        args : object
-            Containing the image and destination arguments.
-            
-    Outputs:
-        nothing.
+    Returns
+    -------
+    args : object
+        Containing the image and destination arguments.
     """
 
     visits_help = "List of visits to loop over. Default is to loop over all."

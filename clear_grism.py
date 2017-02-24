@@ -1,6 +1,27 @@
-""" Module containing all wrapper functions to run CLEAR interlacing and extractions.
+""" Module containing all wrapper functions to run CLEAR interlacing and
+extractions.
 
-Here listing the Program 14227 visits contained in each field. 
+Add catalogs or overlapping fields to the global lists and dictionaries 
+up top.  
+
+Use:
+    
+    Be in the outputs directory.  In the Main, change the field, ref_image,
+    and step numbers.  Then,
+
+    >>> python clear_grism.py
+
+Authors:
+    
+    C.M. Gosmeyer, 2016
+
+Future improvements:
+
+    1. add arg parsing?
+    2. add option to extract either based on magnitude or on catalog
+
+
+Here are the 14227 visits contained in each field. 
 
 ERSPRIME: 19, 20, 21, 22, 23
 GS1: 07, 08, 09, 10, 11, 12
@@ -58,64 +79,20 @@ overlapping_fields = {'GN1':['GDN20'],
                       'GN5':['GDN17', 'GDN18'],
                       'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11']}
 
-#
-#-------------------------------------------------------------------------------  
-
-def prep_clear(field, make_asn = True, check_background = False, 
-    run_prep = True):
-
-    import threedhst.prep_flt_astrodrizzle as init
-    import unicorn.interlace_test as test
-
-    if make_asn:
-
-        unicorn.candels.make_asn_files()
-
-    if check_background:
-
-        #os.chdir('/Users/imomcheva/Work/CLEAR/RAW')
-        os.chdir(paths['path_to_RAW'])
-        asn_files = glob.glob('*asn.fits')
-        for asn in asn_files:
-            root = asn.split('_asn')[0]
-            png = glob.glob(root+'*orbit.*')
-            if (len(png) > 0):
-                continue
-            try:
-                mywfc3.bg.show_orbit_limbangle(asn = [root])
-            except:
-                fp = open(root+'_orbit.failed','w')
-                fp.write('---')
-                fp.close()
-        os.chdir(paths['path_to_PREPARE'])
-        
-    if remove_satelites:
-        
-        #os.chdir('/Users/imomcheva/Work/CLEAR/RAW/')
-        os.chdir(paths['path_to_RAW'])
-        unicorn.prepare.make_IMA_FLT(raw='icxt31r3q_raw.fits', pop_reads=[2])    
-        os.chdir(paths['path_to_PREPARE'])
-        
-    if run_prep:
-
-        os.chdir(paths['path_to_PREPARE'])
-
-        grism_files = glob.glob(field + '*G102_asn.fits')
-        direct_files = glob.glob(field + '*F105W_asn.fits')
-
-        for direct, grism in zip(direct_files, grism_files):
-            init.prep_direct_grism_pair(direct_asn=direct, grism_asn=grism, 
-                radec=paths['path_to_ref_files']+'REF/goodss_3dhst.v4.1.radec.cat',
-                raw_path = paths['path_to_RAW'], mask_grow=8, 
-                scattered_light=False, final_scale = None,
-                skip_direct=False, ACS=False, align_threshold=6)
-
 
 #-------------------------------------------------------------------------------  
 
 def interlace_clear(field, ref_filter):
-    """
-    ** Step 1. of Interlace steps. **
+    """ Interlaces given field with the given reference image filter.
+
+    Parameters
+    ----------
+    field : string
+        The GOODS field to process. 
+    ref_filter : string
+        Filter of the reference image.
+
+    ** Step 1 of Interlace steps. **
 
     We interlace instead of drizzle.
     Drizzling with just a few images produces correlated noise and loss of 
@@ -132,29 +109,25 @@ def interlace_clear(field, ref_filter):
     A second drawback is that only observations taken at same rotation angle 
     can be combined.
 
-    Produces:
+    Produces
+    --------
     - *inter.fits
     - *inter.reg
     - *inter_seg.fits
     - *ref_inter.fits
     - *radec.dat
 
+    Checks
+    ------
+    - Make sure *G102_ref_inter.fits and *inter_seg.fits are all aligned!
+    - Load each *inter.reg into each *G102_ref_inter.fits to check 
+      objects overlap catalog.
+    - These checks must be done by Visit, not field, since Visits are rotated.
+      So do for example,
 
-    Checks:
-   - Make sure *G102_ref_inter.fits and *inter_seg.fits are all aligned!
-   - Load each *inter.reg into each *G102_ref_inter.fits to check 
-     objects overlap catalog.
-   - These checks must be done by Visit, not field, since Visits are rotated.
-     So do for example,
-
-   ds9 GN7-38-315-F105W_inter.fits GN7-38-315-G102_ref_inter.fits GN7-38-315-G102_inter_seg.fits &
+    ds9 GN7-38-315-F105W_inter.fits GN7-38-315-G102_ref_inter.fits GN7-38-315-G102_inter_seg.fits &
 
 
-    Parameters:
-        field : string
-            The GOODS field to process. 
-        ref_filter : string
-            Filter of the reference image.
     """
 
     print "Processing field {}".format(field)
@@ -203,7 +176,6 @@ def interlace_clear(field, ref_filter):
             REF_FILTER = 'F105W'
 
 
-
     grism = glob.glob(field+'*G102_asn.fits')
     print "grism: {}".format(grism)
 
@@ -242,26 +214,31 @@ def interlace_clear(field, ref_filter):
             growx=2, growy=2, auto_offsets=True, ref_exp=ref_exp)
 
 
-
     print "*** interlace_clear step complete ***"
 
 
  #-------------------------------------------------------------------------------  
 
 def model_clear(field):
-    """
+    """ Creates model contam images. 
+
     ** Step 2. of Interlace steps. **
 
-    Creates model contam images. 
+    Parameters
+    ----------
+    field : string
+        The GOODS field to process. 
 
-    Produces:
+    Produces
+    --------
     - *inter_model.pkl
     - *inter_model.fits
     - *inter_0th.reg
     - *maskbg.dat
     - *maskbg.png
 
-    Checks:
+    Checks
+    ------
     - Contam data is saved in *pkl and *inter_model.fits files.
     the latter are meant to look like the observational *inter.fits.
     - Display the *inter_model.fits and *inter.fits.
@@ -278,10 +255,6 @@ def model_clear(field):
     ** Note that the *mask* files do not overwrite **
     ** Delete these files first if want to do a rerun **
 
-
-    Parameters:
-        field : string
-            The GOODS field to process. 
     """
     grism_asn = glob.glob(field+'*G102_asn.fits')
     
@@ -308,27 +281,24 @@ def model_clear(field):
 #-------------------------------------------------------------------------------  
 
 def extract_clear(field, tab):
-    """
+    """ Extracts all sources given in tab from the given field.
 
     ** Step 3. of Interlace steps. **
 
+    Parameters
+    ----------
+    field : string
+        The GOODS field to process. 
+    tab : dictionary
+        Values for each source read from catalog.
 
-    Parameters:
-        field : string
-            The GOODS field to process. 
-        tab : dictionary
-            Values for each source.
-
-    Checks:
+    Checks
+    ------
         *2D.png should show some extracted spectra (most may be empty)
 
     """  
 
     grism = glob.glob(field+'*G102_asn.fits')
-    #if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
-    #    tab = Table.read(path_to_REF + cat['S'], format='ascii')
-    #elif 'GN' in field or 'GDN' in field:
-    #    tab = Table.read(path_to_REF + cat['N'], format='ascii')
 
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
@@ -366,42 +336,39 @@ def extract_clear(field, tab):
 #-------------------------------------------------------------------------------  
 
 def stack_clear(field, tab, cat, catname, ref_filter):
-    """
+    """ Stacks the extractions for all the sources in the given field.
 
-    Parameters:
-        field : string
-            The GOODS field to process. Needs to know to reference GN or GS 
-            catalog.
-        tab : dictionary
-            Values for each source.
-        cat : dictionary
-            Keys are 'N' or 'S' and values are the string names of 
-            the catalog files.
-        catname : string
-            Name of the catalog, for naming output directory.
-        ref_filter : string
-            Filter of the reference image.
+    Parameters
+    ----------
+    field : string
+        The GOODS field to process. Needs to know to reference GN or GS 
+        catalog.
+    tab : dictionary
+        Values for each source from the catalog.
+    cat : dictionary
+        Keys are 'N' or 'S' and values are the string names of 
+        the catalog files.
+    catname : string
+        Name of the catalog, for naming output directory.
+    ref_filter : string
+        Filter of the reference image.
 
-    Checks:
+    Checks
+    ------
         In *stack.png check that the contam models reasonably match actual
         image and that the contam-flux is reasonable.
         python> !open *stack.png
 
-    Notes:
+    Notes
+    -----
         This should stack ALL the *2D* files present in the directory 
         that have the same id, REGARDLESS of the field name.
     """
-    
-    # Need a function that knows to search over all correlating 3dHST pointings
-    # when given a specific CLEAR pointing.
 
     from unicorn.hudf import Stack2D
 
     grism = glob.glob(field+'*G102_asn.fits')
-    #if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
-    #    tab = Table.read(path_to_REF + cat['S'], format='ascii')
-    #elif 'GN' in field or 'GDN' in field:
-    #    tab = Table.read(path_to_REF + cat['N'], format='ascii')
+
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(root=root, 
@@ -451,17 +418,18 @@ def cleanup_extractions(field, cat, catname, ref_filter):
     named /<field>/<catalog>_yyyy-mm-dd/.
     Then tars the directory in Extractions.
 
-    Parameters:
-        field : string
-            The GOODS field to process. Needs to know to reference GN or GS 
-            catalog.
-        cat : dictionary
-            Keys are 'N' or 'S' and values are the string names of 
-            the catalog files.
-        catname : string
-            Name of the catalog, for naming output directory.
-        ref_filter : string
-            Filter of the reference image.
+    Parameters
+    ----------
+    field : string
+        The GOODS field to process. Needs to know to reference GN or GS 
+        catalog.
+    cat : dictionary
+        Keys are 'N' or 'S' and values are the string names of 
+        the catalog files.
+    catname : string
+        Name of the catalog, for naming output directory.
+    ref_filter : string
+        Filter of the reference image.
 
     """
     path_to_Extractions = paths['path_to_Extractions']
@@ -490,7 +458,19 @@ def cleanup_extractions(field, cat, catname, ref_filter):
 #-------------------------------------------------------------------------------  
 
 def clear_pipeline_main(fields, do_steps, cats, ref_filter):
-    """
+    """ Main for the interlacing and extracting step. 
+
+    Parameters
+    ----------
+    fields : list of strings
+        The GOODS fields to process. Needs to know to reference GN or GS 
+        catalog.
+    do_steps : list of ints 
+        The step numbers to perform.
+    cats : list of dictionaries
+        Dictionaries of the field (N/S) and catalog name.
+    ref_filter : string
+        Filter of the reference image.    
     """
     path_to_REF = paths['path_to_ref_files'] + 'REF/'
 

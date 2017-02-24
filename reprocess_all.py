@@ -1,11 +1,15 @@
 #! /usr/bin/env python
 
-"""Module to reprocess all data or subset of visits. 
-Pops reads designated reads. 
-Check the new FLTs against old. They should cleaner, especially if
-specified a read to be removed.
+"""Module to reprocess all data or subset of visits, popping the designated 
+reads. When a bad read is found using diagnostic PNGs from Step 2, add them
+to an elif in :func:`reprocess_all`.
 
 *Step 3 of Prep.*
+
+Checks:
+
+    Compare the new FLTs against old. They should cleaner, especially if
+    specified a read to be removed.
 
 Use:
 
@@ -21,10 +25,7 @@ Authors:
 
 Example:
 
-    >>> python reprocess_all.py --v 44 05
-
-Outputs:
-
+    >>> python reprocess_all.py --v 44 05 A4
 
 Notes:
 
@@ -46,7 +47,14 @@ from mywfc3 import reprocess_wfc3
 #-------------------------------------------------------------------------------  
 
 def read_filesinfo():
-    """ Assumes in RAW directory.
+    """ Reads in the "files.info" file. Assumes you are in the RAW directory.
+
+    Returns
+    -------
+    files : numpy array
+        Names of the FLT files.
+    filters : numpy array
+        Names the files' filters. 
     """
     if os.path.isfile('files.info'):
 
@@ -62,18 +70,15 @@ def read_filesinfo():
 #-------------------------------------------------------------------------------  
 
 def reprocess_all(visits=[]):
-    """
-    Big list of all of the FLTs reprocessed from the IMA files
+    """ For each observation listed with bad read(s), pop those reads from 
+    the IMA and reprocess to generate a new FLT, as long as the observation
+    is in the given visits.  
 
-    Satellites:
-    icxt04e4q: read 6
-    icxt05h7q: read 1
-    icxt31r3q: read 2
-    icxt63lzq: read 10
-
-    Earth shine:
-    44,45
-    (for now don't pop reads)
+    Parameters
+    ----------
+    visits : list of ints/strings
+        The two-digit numbers of the visits to be reprocessed. e.g., 
+        [01, 11, 'a4']    
 
     """
     print visits
@@ -160,16 +165,11 @@ def reprocess_all(visits=[]):
 
 def parse_args():
     """Parses command line arguments.
-    
-    Parameters:
-        nothing
         
-    Returns:
-        args : object
-            Containing the image and destination arguments.
-            
-    Outputs:
-        nothing.
+    Returns
+    -------
+    args : object
+        Containing the image and destination arguments.
     """
 
     visits_help = "List of visits to loop over. Default is to loop over all."

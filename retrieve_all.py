@@ -54,12 +54,19 @@ def make_filesinfo():
 #-------------------------------------------------------------------------------  
 
 def retrieve_all(visits=[], overwrite=True):
-    """
+    """ Retrieves all the visits' FLTs and persistence masks from their QL 
+    central store location. 
 
-    Parameters:
-        overwrite : {True, False}
-            Set to True if want to overwrite existing files.
-            False by default.
+    If visits=[], then retrieves ALL vists' FLTs. 
+
+    Parameters
+    ----------
+    visits : list of ints/strings
+        The two-digit numbers of the visits to be retrieved. e.g., 
+        [01, 11, 'a4']
+
+    overwrite : {True, False}
+        Set to True if want to overwrite existing files.
     """
 
     wfc3_centralstore = '/grp/hst/wfc3a/GO_Links/14227/'
@@ -122,16 +129,12 @@ def retrieve_all(visits=[], overwrite=True):
 
 def parse_args():
     """Parses command line arguments.
-    
-    Parameters:
-        nothing
         
-    Returns:
-        args : object
-            Containing the image and destination arguments.
+    Returns
+    -------
+    args : object
+        Containing the image and destination arguments.
             
-    Outputs:
-        nothing.
     """
 
     visits_help = "List of visits to retrieve from wfc3 central store. Default is all."
