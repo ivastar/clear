@@ -39,6 +39,7 @@ GN7: 36, 37, 38, 39, 40
 GN6 is a myth
 """
 
+from __future__ import print_function
 
 import os
 import glob
@@ -130,7 +131,7 @@ def interlace_clear(field, ref_filter):
 
     """
 
-    print "Processing field {}".format(field)
+    print("Processing field {}".format(field))
 
     from unicorn.reduce import adriz_blot_from_reference as adriz_blot
 
@@ -177,7 +178,7 @@ def interlace_clear(field, ref_filter):
 
 
     grism = glob.glob(field+'*G102_asn.fits')
-    print "grism: {}".format(grism)
+    print("grism: {}".format(grism))
 
     for i in range(len(grism)):
         pointing=grism[i].split('_asn')[0]
@@ -214,7 +215,7 @@ def interlace_clear(field, ref_filter):
             growx=2, growy=2, auto_offsets=True, ref_exp=ref_exp)
 
 
-    print "*** interlace_clear step complete ***"
+    print("*** interlace_clear step complete ***")
 
 
  #-------------------------------------------------------------------------------  
@@ -275,7 +276,7 @@ def model_clear(field):
                 update=True, resid_threshold=4, clip_left=640, 
                 save_figure=True, interlace=True)
 
-    print "*** model_clear step complete ***"
+    print("*** model_clear step complete ***")
 
 
 #-------------------------------------------------------------------------------  
@@ -330,7 +331,7 @@ def extract_clear(field, tab):
             except:
                 continue
 
-    print "*** extract_clear step complete ***"              
+    print("*** extract_clear step complete ***")        
 
 
 #-------------------------------------------------------------------------------  
@@ -372,8 +373,10 @@ def stack_clear(field, tab, cat, catname, ref_filter):
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(root=root, 
-                                                  grow_factor=2, growx=2, 
-                                                  growy=2, MAG_LIMIT=24,
+                                                  grow_factor=2, 
+                                                  growx=2, 
+                                                  growy=2, 
+                                                  MAG_LIMIT=24,
                                                   REFINE_MAG_LIMIT=21, 
                                                   make_zeroth_model=False, 
                                                   use_segm=False,
@@ -406,10 +409,84 @@ def stack_clear(field, tab, cat, catname, ref_filter):
                 except:
                     continue
 
-    cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
+    #cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
 
-    print "*** stack_clear step complete ***"
+    print("*** stack_clear step complete ***")
     
+
+#------------------------------------------------------------------------------- 
+
+def fit_redshifts_and_emissionlines(field):
+    """ Fits redshifts and emission lines. 
+
+    Parameters
+    ----------
+    field : string
+        The GOODS field to process. Needs to know to reference GN or GS 
+        catalog.
+
+    Notes
+    -----
+    Based on lines 182-207 of unicorn/aws.py
+    
+    """
+    grism = glob.glob(field+'*G102_asn.fits')
+
+    for i in range(len(grism)):
+        root = grism[i].split('-G102')[0]
+        model = unicorn.reduce.process_GrismModel(root=root, 
+                                                  grow_factor=2, 
+                                                  growx=2, 
+                                                  growy=2, 
+                                                  MAG_LIMIT=24,
+                                                  REFINE_MAG_LIMIT=21, 
+                                                  make_zeroth_model=False, 
+                                                  use_segm=False,
+                                                  model_slope=0, 
+                                                  direct='F105W', 
+                                                  grism='G102', 
+                                                  BEAMS=['A', 'B', 'C', 'D','E'],
+                                                  align_reference=False)
+
+        try:
+            ids = tab['ID']
+        except:
+            # Needed for the 'plux_z*' catalogs.
+            ids_raw = tab['id']
+            ids = []
+            for id in ids_raw:
+                ids.append(id.split('_')[-1])
+
+        for id in ids:
+            obj_root='{}-G102_{:05d}'.format(root, id)
+            status = model.twod_spectrum(id, miny=40)
+            if not status:
+                continue
+            try:
+                # Redshift fit
+                gris = test.SimultaneousFit(obj_root,lowz_thresh=0.01, FIGURE_FORMAT='png') 
+            except:
+                continue
+
+            if gris.status is False:
+                continue
+
+            if not os.path.exists(obj_root+'.new_zfit.pz.fits'):
+                try:
+                    gris.new_fit_constrained()
+                    gris.new_save_results()
+                    gris.make_2d_model()
+                except:
+                    continue
+            if not os.path.exists(obj_root+'.linefit.fits'):
+                try:
+                    # Emission line fit
+                    gris.new_fit_free_emlines(ztry=None, NSTEP=600)
+                except:
+                    continue
+
+    print("*** fit redshifts and emission lines step complete ***")
+
 
 #------------------------------------------------------------------------------- 
 
@@ -434,8 +511,9 @@ def cleanup_extractions(field, cat, catname, ref_filter):
     """
     path_to_Extractions = paths['path_to_Extractions']
 
+    # add redshift and emission line fits
     files = glob.glob('*1D*') + glob.glob('*2D*') + glob.glob('*stack*')
-    print files
+    print(files)
 
     dirname = os.path.join(path_to_Extractions, field, '{}_{}_{}'.format(catname, ref_filter,
         time.strftime('%Y-%m-%d')))
@@ -444,7 +522,7 @@ def cleanup_extractions(field, cat, catname, ref_filter):
     if not os.path.isdir(dirname):
         os.mkdir(dirname)
 
-    print "Moving extractions from catalog {} to {}".format(catname, dirname)
+    print("Moving extractions from catalog {} to {}".format(catname, dirname))
 
     for f in files:
         shutil.move(f, os.path.join(dirname,f))
@@ -475,8 +553,8 @@ def clear_pipeline_main(fields, do_steps, cats, ref_filter):
     path_to_REF = paths['path_to_ref_files'] + 'REF/'
 
     for field in fields:
-        print "***Beginning field {}***".format(field)
-        print ""
+        print("***Beginning field {}***".format(field))
+        print("")
 
         # Choose the field for the catalogs, where the catalog options include emitters and quiescent.
         if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
@@ -485,16 +563,16 @@ def clear_pipeline_main(fields, do_steps, cats, ref_filter):
             cats_field = cats['N']
 
         for cat, catname in zip(cats_field, cats['name']):
-            print "***Beginning catalog {}***".format(cat)
-            print ""
+            print("***Beginning catalog {}***".format(cat))
+            print("")
 
             if 'GN' in field:
                 # add primary CLEAR pointing to fields
                 overlapping_fields_all = overlapping_fields[field]
                 overlapping_fields_all.append(field)
                 for overlapping_field in overlapping_fields_all:
-                    print "***Beginning overlapping 13420 field {}***".format(overlapping_field)
-                    print ""
+                    print("***Beginning overlapping 13420 field {}***".format(overlapping_field))
+                    print("")
                     if 1 in do_steps:
                         interlace_clear(field=overlapping_field, ref_filter=ref_filter)
                     if 2 in do_steps:
@@ -515,6 +593,11 @@ def clear_pipeline_main(fields, do_steps, cats, ref_filter):
                 
             if 4 in do_steps:
                 stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter) 
+            if 5 in do_steps:
+                fit_redshifts_and_emissionlines(field=field, ...)
+                cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
+            elif 4 in do_steps and 5 not in do_steps:
+                cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)               
         
 
 
@@ -526,7 +609,7 @@ if __name__=='__main__':
     # if otherwise ran another extraction catalog through 3 first.)
     do_steps = [1,2]
     clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
-    do_steps = [3,4]
+    do_steps = [3,4,5]
     for cat in all_cats:
         clear_pipeline_main(fields=fields, do_steps=do_steps, cats=cat, ref_filter=ref_filter)
 
