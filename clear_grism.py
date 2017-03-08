@@ -182,21 +182,31 @@ def interlace_clear(field, ref_filter):
 
     for i in range(len(grism)):
         pointing=grism[i].split('_asn')[0]
-        print pointing
+        print(pointing)
         
         # Find whether pointing begins with a direct image (0) or grism (1).
         ref_exp = 0 #find_pointing_start(pointing)
-        print "ref_exp: {}, pointing: {}".format(ref_exp, pointing)
+        print("ref_exp: {}, pointing: {}".format(ref_exp, pointing))
 
-        adriz_blot(pointing=pointing, pad=pad, NGROWX=NGROWX, 
-            NGROWY=NGROWY, growx=2, growy=2, auto_offsets=True, 
-            ref_exp=ref_exp, ref_image=REF_IMAGE, ref_ext=REF_EXT, 
-            ref_filter=REF_FILTER, seg_image=SEG_IMAGE, 
-            cat_file=CATALOG, grism='G102')     
+        adriz_blot(
+            pointing=pointing, 
+            pad=pad, 
+            NGROWX=NGROWX, 
+            NGROWY=NGROWY, 
+            growx=2, 
+            growy=2, 
+            auto_offsets=True, 
+            ref_exp=ref_exp, 
+            ref_image=REF_IMAGE, 
+            ref_ext=REF_EXT, 
+            ref_filter=REF_FILTER, 
+            seg_image=SEG_IMAGE, 
+            cat_file=CATALOG, 
+            grism='G102')     
        
         if 'GN5-42-346' in pointing:
              # These stare images had a bad dither. Set to 1x1 binning.
-            print "Binning 1x1!"
+            print("Binning 1x1!")
             growx=1
             growy=1
         else:
@@ -204,15 +214,35 @@ def interlace_clear(field, ref_filter):
             growy=2 
 
         # Interlace the direct images. Set ref_exp to always be zero.                                                                             
-        unicorn.reduce.interlace_combine(pointing.replace('G102','F105W'), 
-            view=False, use_error=True, make_undistorted=False, pad=pad, 
-            NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
-            growx=growx, growy=growy, auto_offsets=True, ref_exp=0)
+        unicorn.reduce.interlace_combine(
+            pointing.replace('G102','F105W'), 
+            view=False, 
+            use_error=True, 
+            make_undistorted=False,
+            pad=pad, 
+            NGROWX=NGROWX, 
+            NGROWY=NGROWY,
+            ddx=0, 
+            ddy=0, 
+            growx=growx, 
+            growy=growy, 
+            auto_offsets=True, 
+            ref_exp=0)
         # Interlace the grism images.
-        unicorn.reduce.interlace_combine(pointing, view=False, 
-            use_error=True, make_undistorted=False, pad=pad, 
-            NGROWX=NGROWX, NGROWY=NGROWY, ddx=0, ddy=0, 
-            growx=2, growy=2, auto_offsets=True, ref_exp=ref_exp)
+        unicorn.reduce.interlace_combine(
+            pointing, 
+            view=False, 
+            use_error=True, 
+            make_undistorted=False, 
+            pad=pad, 
+            NGROWX=NGROWX, 
+            NGROWY=NGROWY, 
+            ddx=0, 
+            ddy=0, 
+            growx=2, 
+            growy=2, 
+            auto_offsets=True, 
+            ref_exp=ref_exp)
 
 
     print("*** interlace_clear step complete ***")
@@ -263,18 +293,37 @@ def model_clear(field):
         root = grism_asn[i].split('-G102')[0]
         direct = 'F105W'
         grism = 'G102'
-        m0 = unicorn.reduce.GrismModel(root=root, direct=direct, grism=grism)
-        model_list = m0.get_eazy_templates(dr_min=0.5, MAG_LIMIT=25)
-        model = unicorn.reduce.process_GrismModel(root=root, 
+        m0 = unicorn.reduce.GrismModel(
+            root=root,
+            direct=direct,
+            grism=grism)
+        model_list = m0.get_eazy_templates(
+            dr_min=0.5, 
+            MAG_LIMIT=25)
+        model = unicorn.reduce.process_GrismModel(
+            root=root, 
             model_list=model_list,
-            grow_factor=2, growx=2, growy=2, MAG_LIMIT=24, 
-            REFINE_MAG_LIMIT=21, make_zeroth_model=False, use_segm=False, 
-            model_slope=0, direct=direct, grism=grism, 
-            BEAMS=['A', 'B', 'C', 'D','E'], align_reference=False)
+            grow_factor=2, 
+            growx=2, 
+            growy=2, 
+            MAG_LIMIT=24, 
+            REFINE_MAG_LIMIT=21, 
+            make_zeroth_model=False, 
+            use_segm=False, 
+            model_slope=0, 
+            direct=direct, 
+            grism=grism, 
+            BEAMS=['A', 'B', 'C', 'D','E'], 
+            align_reference=False)
         if not os.path.exists(os.path.basename(model.root) + '-G102_maskbg.dat'):
-            model.refine_mask_background(threshold=0.002, grow_mask=14, 
-                update=True, resid_threshold=4, clip_left=640, 
-                save_figure=True, interlace=True)
+            model.refine_mask_background(
+                threshold=0.002, 
+                grow_mask=14, 
+                update=True, 
+                resid_threshold=4, 
+                clip_left=640, 
+                save_figure=True, 
+                interlace=True)
 
     print("*** model_clear step complete ***")
 
@@ -303,11 +352,20 @@ def extract_clear(field, tab):
 
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
-        model = unicorn.reduce.process_GrismModel(root=root, 
-            grow_factor=2, growx=2, growy=2, MAG_LIMIT=24, 
-            REFINE_MAG_LIMIT=21, make_zeroth_model=False, 
-            use_segm=False, model_slope=0, direct='F105W', grism='G102', 
-            BEAMS=['A', 'B', 'C', 'D','E'], align_reference=False)
+        model = unicorn.reduce.process_GrismModel(
+            root=root, 
+            grow_factor=2, 
+            growx=2,
+            growy=2, 
+            MAG_LIMIT=24, 
+            REFINE_MAG_LIMIT=21, 
+            make_zeroth_model=False, 
+            use_segm=False, 
+            model_slope=0, 
+            direct='F105W', 
+            grism='G102', 
+            BEAMS=['A', 'B', 'C', 'D','E'],
+            align_reference=False)
         try:
             ids = tab['ID']
         except:
@@ -319,15 +377,21 @@ def extract_clear(field, tab):
 
         for id in [id for id in ids if id in model.cat.id]:
             try:
-                model.twod_spectrum(id=id, grow=1, miny=-36, maxy=None, 
-                                    CONTAMINATING_MAGLIMIT=23, 
-                                    refine=False, verbose=False, 
-                                    force_refine_nearby=False, 
-                                    USE_REFERENCE_THUMB=True,
-                                    USE_FLUX_RADIUS_SCALE=3, 
-                                    BIG_THUMB=False, extract_1d=True)
+                model.twod_spectrum(
+                    id=id, 
+                    grow=1, 
+                    miny=-36, 
+                    maxy=None, 
+                    CONTAMINATING_MAGLIMIT=23, 
+                    refine=False, 
+                    verbose=False, 
+                    force_refine_nearby=False, 
+                    USE_REFERENCE_THUMB=True,
+                    USE_FLUX_RADIUS_SCALE=3, 
+                    BIG_THUMB=False, 
+                    extract_1d=True)
                 model.show_2d(savePNG=True, verbose=True)
-                print 'Extracted {}'.format(id)
+                print("Extracted {}".format(id))
             except:
                 continue
 
@@ -372,19 +436,20 @@ def stack_clear(field, tab, cat, catname, ref_filter):
 
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
-        model = unicorn.reduce.process_GrismModel(root=root, 
-                                                  grow_factor=2, 
-                                                  growx=2, 
-                                                  growy=2, 
-                                                  MAG_LIMIT=24,
-                                                  REFINE_MAG_LIMIT=21, 
-                                                  make_zeroth_model=False, 
-                                                  use_segm=False,
-                                                  model_slope=0, 
-                                                  direct='F105W', 
-                                                  grism='G102', 
-                                                  BEAMS=['A', 'B', 'C', 'D','E'],
-                                                  align_reference=False)
+        model = unicorn.reduce.process_GrismModel(
+            root=root, 
+            grow_factor=2, 
+            growx=2, 
+            growy=2, 
+            MAG_LIMIT=24,
+            REFINE_MAG_LIMIT=21, 
+            make_zeroth_model=False, 
+            use_segm=False,
+            model_slope=0, 
+            direct='F105W', 
+            grism='G102', 
+            BEAMS=['A', 'B', 'C', 'D','E'],
+            align_reference=False)
         try:
             ids = tab['ID']
         except:
@@ -399,13 +464,18 @@ def stack_clear(field, tab, cat, catname, ref_filter):
                 #and (not os.path.exists(field+'-G102_{}.2D.fits'.format(id))):
                 try:
                     search='*-*-*-G102'
-                    print 'searching %s*%05d.2D.fits'%(search, id)
-                    spec = Stack2D(id=np.int(id), inverse=False, 
-                                   scale=[1,99], fcontam=2.,
-                                   ref_wave = 1.05e4,
-                                   root='{}-G102'.format(field), 
-                                   search='*-*-*-G102', files=None, 
-                                   go=True, new_contam=False)
+                    print('searching %s*%05d.2D.fits'%(search, id))
+                    spec = Stack2D(
+                        id=np.int(id), 
+                        inverse=False, 
+                        scale=[1,99], 
+                        fcontam=2.,
+                        ref_wave = 1.05e4,
+                        root='{}-G102'.format(field), 
+                        search='*-*-*-G102', 
+                        files=None, 
+                        go=True, 
+                        new_contam=False)
                 except:
                     continue
 
@@ -416,7 +486,7 @@ def stack_clear(field, tab, cat, catname, ref_filter):
 
 #------------------------------------------------------------------------------- 
 
-def fit_redshifts_and_emissionlines(field):
+def fit_redshifts_and_emissionlines(field, tab, cat):
     """ Fits redshifts and emission lines. 
 
     Parameters
@@ -428,25 +498,26 @@ def fit_redshifts_and_emissionlines(field):
     Notes
     -----
     Based on lines 182-207 of unicorn/aws.py
-    
+
     """
     grism = glob.glob(field+'*G102_asn.fits')
 
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
-        model = unicorn.reduce.process_GrismModel(root=root, 
-                                                  grow_factor=2, 
-                                                  growx=2, 
-                                                  growy=2, 
-                                                  MAG_LIMIT=24,
-                                                  REFINE_MAG_LIMIT=21, 
-                                                  make_zeroth_model=False, 
-                                                  use_segm=False,
-                                                  model_slope=0, 
-                                                  direct='F105W', 
-                                                  grism='G102', 
-                                                  BEAMS=['A', 'B', 'C', 'D','E'],
-                                                  align_reference=False)
+        model = unicorn.reduce.process_GrismModel(
+            root=root, 
+            grow_factor=2, 
+            growx=2, 
+            growy=2, 
+            MAG_LIMIT=24,
+            REFINE_MAG_LIMIT=21, 
+            make_zeroth_model=False, 
+            use_segm=False,
+            model_slope=0, 
+            direct='F105W', 
+            grism='G102', 
+            BEAMS=['A', 'B', 'C', 'D','E'],
+            align_reference=False)
 
         try:
             ids = tab['ID']
@@ -458,32 +529,36 @@ def fit_redshifts_and_emissionlines(field):
                 ids.append(id.split('_')[-1])
 
         for id in ids:
-            obj_root='{}-G102_{:05d}'.format(root, id)
-            status = model.twod_spectrum(id, miny=40)
-            if not status:
-                continue
-            try:
-                # Redshift fit
-                gris = test.SimultaneousFit(obj_root,lowz_thresh=0.01, FIGURE_FORMAT='png') 
-            except:
-                continue
-
-            if gris.status is False:
-                continue
-
-            if not os.path.exists(obj_root+'.new_zfit.pz.fits'):
+            if (id in model.cat.id):
+                obj_root='{}-G102_{:05d}'.format(root, id)
+                status = model.twod_spectrum(id, miny=40)
+                if not status:
+                    continue
                 try:
-                    gris.new_fit_constrained()
-                    gris.new_save_results()
-                    gris.make_2d_model()
+                    # Redshift fit
+                    gris = test.SimultaneousFit(
+                        obj_root,
+                        lowz_thresh=0.01, 
+                        FIGURE_FORMAT='png') 
                 except:
                     continue
-            if not os.path.exists(obj_root+'.linefit.fits'):
-                try:
-                    # Emission line fit
-                    gris.new_fit_free_emlines(ztry=None, NSTEP=600)
-                except:
+
+                if gris.status is False:
                     continue
+
+                if not os.path.exists(obj_root+'.new_zfit.pz.fits'):
+                    try:
+                        gris.new_fit_constrained()
+                        gris.new_save_results()
+                        gris.make_2d_model()
+                    except:
+                        continue
+                if not os.path.exists(obj_root+'.linefit.fits'):
+                    try:
+                        # Emission line fit
+                        gris.new_fit_free_emlines(ztry=None, NSTEP=600)
+                    except:
+                        continue
 
     print("*** fit redshifts and emission lines step complete ***")
 
@@ -594,10 +669,11 @@ def clear_pipeline_main(fields, do_steps, cats, ref_filter):
             if 4 in do_steps:
                 stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter) 
             if 5 in do_steps:
-                fit_redshifts_and_emissionlines(field=field, ...)
-                cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
+                fit_redshifts_and_emissionlines(field=field, tab=tab, cat=cat)
+                #cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
             elif 4 in do_steps and 5 not in do_steps:
-                cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)               
+                print("")
+                #cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)               
         
 
 
@@ -607,8 +683,8 @@ if __name__=='__main__':
     ref_filter = 'F125W'
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
-    do_steps = [1,2]
-    clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
+    #do_steps = [1,2]
+    #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
     do_steps = [3,4,5]
     for cat in all_cats:
         clear_pipeline_main(fields=fields, do_steps=do_steps, cats=cat, ref_filter=ref_filter)
