@@ -70,7 +70,12 @@ zn_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6
              'S' : ['added_sources_S_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]],
              'name' : ['z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
 
-all_cats = [quiescent_cats, emitters_cats, zn_cats] #, ivas_cat]
+# Full catalogs, to be used if extracting based on magnitude. 
+full_cats = {'N' : ['GoodsN_plus.dat'], 
+                 'S' : ['GoodsS_plus.dat'], 
+                 'name' : ['maglim']}
+
+all_cats = [quiescent_cats, emitters_cats, zn_cats, full_cats] #, ivas_cat]
 
 ## Associate CLEAR Goods-N pointings with overlapping 3DHST pointings.
 overlapping_fields = {'GN1':['GDN20'],
@@ -330,7 +335,7 @@ def model_clear(field):
 
 #-------------------------------------------------------------------------------  
 
-def extract_clear(field, tab):
+def extract_clear(field, tab, mag_lim=None):
     """ Extracts all sources given in tab from the given field.
 
     ** Step 3. of Interlace steps. **
@@ -341,6 +346,9 @@ def extract_clear(field, tab):
         The GOODS field to process. 
     tab : dictionary
         Values for each source read from catalog.
+    mag_lim : int 
+        The magnitude down from which to extract. If 'None', Then
+        defaults to 24. 
 
     Checks
     ------
@@ -350,6 +358,9 @@ def extract_clear(field, tab):
 
     grism = glob.glob(field+'*G102_asn.fits')
 
+    if mag_lim == None:
+        mag_lim=24
+
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(
@@ -357,7 +368,7 @@ def extract_clear(field, tab):
             grow_factor=2, 
             growx=2,
             growy=2, 
-            MAG_LIMIT=24, 
+            MAG_LIMIT=mag_lim,
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False, 
@@ -366,14 +377,19 @@ def extract_clear(field, tab):
             grism='G102', 
             BEAMS=['A', 'B', 'C', 'D','E'],
             align_reference=False)
+
         try:
             ids = tab['ID']
         except:
-            # Needed for the 'plux_z*' catalogs.
-            ids_raw = tab['id']
-            ids = []
-            for id in ids_raw:
-                ids.append(id.split('_')[-1])
+            try:
+                # Needed for the 'plux_z*' catalogs.
+                ids_raw = tab['id']
+                ids = []
+                for id in ids_raw:
+                    ids.append(id.split('_')[-1])
+            except:
+                # For 'Goods*plus' catalogs.
+                ids = tab['NUMBER']
 
         for id in [id for id in ids if id in model.cat.id]:
             try:
@@ -400,7 +416,7 @@ def extract_clear(field, tab):
 
 #-------------------------------------------------------------------------------  
 
-def stack_clear(field, tab, cat, catname, ref_filter):
+def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
     """ Stacks the extractions for all the sources in the given field.
 
     Parameters
@@ -417,6 +433,10 @@ def stack_clear(field, tab, cat, catname, ref_filter):
         Name of the catalog, for naming output directory.
     ref_filter : string
         Filter of the reference image.
+    mag_lim : int 
+        The magnitude down from which to extract. If 'None', Then
+        defaults to 24. 
+
 
     Checks
     ------
@@ -434,6 +454,9 @@ def stack_clear(field, tab, cat, catname, ref_filter):
 
     grism = glob.glob(field+'*G102_asn.fits')
 
+    if mag_lim == None:
+        mag_lim=24
+
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(
@@ -441,7 +464,7 @@ def stack_clear(field, tab, cat, catname, ref_filter):
             grow_factor=2, 
             growx=2, 
             growy=2, 
-            MAG_LIMIT=24,
+            MAG_LIMIT=mag_lim,
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False,
@@ -453,11 +476,15 @@ def stack_clear(field, tab, cat, catname, ref_filter):
         try:
             ids = tab['ID']
         except:
-            # Needed for the 'plux_z*' catalogs.
-            ids_raw = tab['id']
-            ids = []
-            for id in ids_raw:
-                ids.append(id.split('_')[-1])
+            try:
+                # Needed for the 'plux_z*' catalogs.
+                ids_raw = tab['id']
+                ids = []
+                for id in ids_raw:
+                    ids.append(id.split('_')[-1])
+            except:
+                # For 'Goods*plus' catalogs.
+                ids = tab['NUMBER']
 
         for id in ids:
             if (id in model.cat.id):
@@ -509,7 +536,7 @@ def fit_redshifts_and_emissionlines(field, tab, cat):
             grow_factor=2, 
             growx=2, 
             growy=2, 
-            MAG_LIMIT=24,
+            MAG_LIMIT=24, #=mag_lim
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False,
@@ -610,7 +637,7 @@ def cleanup_extractions(field, cat, catname, ref_filter):
 #-------------------------------------------------------------------------------  
 #-------------------------------------------------------------------------------  
 
-def clear_pipeline_main(fields, do_steps, cats, ref_filter):
+def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
     """ Main for the interlacing and extracting step. 
 
     Parameters
@@ -620,8 +647,13 @@ def clear_pipeline_main(fields, do_steps, cats, ref_filter):
         catalog.
     do_steps : list of ints 
         The step numbers to perform.
-    cats : list of dictionaries
+    cats : dictionary
         Dictionaries of the field (N/S) and catalog name.
+        To extract all mags to this limit from full catalog, select 
+        'full_cats'.
+    mag_lim : int 
+        The magnitude down from which to extract. If 'None', Then
+        defaults to 24. 
     ref_filter : string
         Filter of the reference image.    
     """
@@ -653,8 +685,8 @@ def clear_pipeline_main(fields, do_steps, cats, ref_filter):
                     if 2 in do_steps:
                         model_clear(field=overlapping_field)
                     if 3 in do_steps:
-                        tab = Table.read(path_to_REF + cat, format='ascii')
-                        extract_clear(field=overlapping_field, tab=tab)
+                        tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
+                        extract_clear(field=overlapping_field, tab=tab, mag_lim=mag_lim)
 
             else:
                 if 1 in do_steps:
@@ -663,11 +695,11 @@ def clear_pipeline_main(fields, do_steps, cats, ref_filter):
                     model_clear(field=field)
 
                 if 3 in do_steps:
-                    tab = Table.read(path_to_REF + cat, format='ascii')
-                    extract_clear(field=field, tab=tab)
+                    tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
+                    extract_clear(field=field, tab=tab, mag_lim=mag_lim)
                 
             if 4 in do_steps:
-                stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter) 
+                stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
             if 5 in do_steps:
                 fit_redshifts_and_emissionlines(field=field, tab=tab, cat=cat)
                 #cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
@@ -681,11 +713,17 @@ if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
     fields = ['GN2'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
     ref_filter = 'F125W'
+    mag_lim = 25 #None
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
     #do_steps = [1,2]
     #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
-    do_steps = [3,4,5]
+    do_steps = [3,4]
     for cat in all_cats:
-        clear_pipeline_main(fields=fields, do_steps=do_steps, cats=cat, ref_filter=ref_filter)
+        clear_pipeline_main(
+            fields=fields, 
+            do_steps=do_steps, 
+            cats=cat, 
+            mag_lim=mag_lim, 
+            ref_filter=ref_filter)
 
