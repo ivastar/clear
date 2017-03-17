@@ -71,8 +71,8 @@ zn_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6
              'name' : ['z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
 
 # Full catalogs, to be used if extracting based on magnitude. 
-full_cats = {'N' : ['GoodsN_plus.dat'], 
-                 'S' : ['GoodsS_plus.dat'], 
+full_cats = {'N' : ['GoodsN_plus.cat'], 
+                 'S' : ['GoodsS_plus.cat'], 
                  'name' : ['maglim']}
 
 all_cats = [quiescent_cats, emitters_cats, zn_cats, full_cats] #, ivas_cat]
@@ -347,8 +347,8 @@ def extract_clear(field, tab, mag_lim=None):
     tab : dictionary
         Values for each source read from catalog.
     mag_lim : int 
-        The magnitude down from which to extract. If 'None', Then
-        defaults to 24. 
+        The magnitude down from which to extract.  If 'None' ignores
+        magnitude filter.
 
     Checks
     ------
@@ -358,17 +358,16 @@ def extract_clear(field, tab, mag_lim=None):
 
     grism = glob.glob(field+'*G102_asn.fits')
 
-    if mag_lim == None:
-        mag_lim=24
-
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
+        # Takes a subset of the full catalog, retaining
+        # only objects visible in the field (model.cat.id)
         model = unicorn.reduce.process_GrismModel(
             root=root, 
             grow_factor=2, 
             growx=2,
             growy=2, 
-            MAG_LIMIT=mag_lim,
+            MAG_LIMIT=24,
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False, 
@@ -390,26 +389,82 @@ def extract_clear(field, tab, mag_lim=None):
             except:
                 # For 'Goods*plus' catalogs.
                 ids = tab['NUMBER']
+                print("Using Goods*plus catalog.")
 
-        for id in [id for id in ids if id in model.cat.id]:
-            try:
-                model.twod_spectrum(
-                    id=id, 
-                    grow=1, 
-                    miny=-36, 
-                    maxy=None, 
-                    CONTAMINATING_MAGLIMIT=23, 
-                    refine=False, 
-                    verbose=False, 
-                    force_refine_nearby=False, 
-                    USE_REFERENCE_THUMB=True,
-                    USE_FLUX_RADIUS_SCALE=3, 
-                    BIG_THUMB=False, 
-                    extract_1d=True)
-                model.show_2d(savePNG=True, verbose=True)
-                print("Extracted {}".format(id))
-            except:
-                continue
+        #print(model.cat.mag)
+        #print(model.cat.id)
+
+        for id, mag in zip(model.cat.id, model.cat.mag):
+            if mag_lim != None:
+                if (id in ids and mag <= mag_lim):   
+                    print("id, mag: ", id, mag)
+                    try:
+                        model.twod_spectrum(
+                            id=id, 
+                            grow=1, 
+                            miny=-36, 
+                            maxy=None, 
+                            CONTAMINATING_MAGLIMIT=23, 
+                            refine=False, 
+                            verbose=False, 
+                            force_refine_nearby=False, 
+                            USE_REFERENCE_THUMB=True,
+                            USE_FLUX_RADIUS_SCALE=3, 
+                            BIG_THUMB=False, 
+                            extract_1d=True)
+                        model.show_2d(savePNG=True, verbose=True)
+                        print("Extracted {}".format(id))
+                    except:
+                        continue
+
+
+            else:
+                if (id in ids):
+                    print("id: ", id)
+                    try:
+                        model.twod_spectrum(
+                            id=id, 
+                            grow=1, 
+                            miny=-36, 
+                            maxy=None, 
+                            CONTAMINATING_MAGLIMIT=23, 
+                            refine=False, 
+                            verbose=False, 
+                            force_refine_nearby=False, 
+                            USE_REFERENCE_THUMB=True,
+                            USE_FLUX_RADIUS_SCALE=3, 
+                            BIG_THUMB=False, 
+                            extract_1d=True)
+                        model.show_2d(savePNG=True, verbose=True)
+                        print("Extracted {}".format(id))
+                    except:
+                        continue
+
+        """
+        for id in ids:
+
+            if (id in model.cat.id):
+
+                
+                try:
+                    model.twod_spectrum(
+                        id=id, 
+                        grow=1, 
+                        miny=-36, 
+                        maxy=None, 
+                        CONTAMINATING_MAGLIMIT=23, 
+                        refine=False, 
+                        verbose=False, 
+                        force_refine_nearby=False, 
+                        USE_REFERENCE_THUMB=True,
+                        USE_FLUX_RADIUS_SCALE=3, 
+                        BIG_THUMB=False, 
+                        extract_1d=True)
+                    model.show_2d(savePNG=True, verbose=True)
+                    print("Extracted {}".format(id))
+                except:
+                    continue
+        """
 
     print("*** extract_clear step complete ***")        
 
@@ -434,8 +489,8 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
     ref_filter : string
         Filter of the reference image.
     mag_lim : int 
-        The magnitude down from which to extract. If 'None', Then
-        defaults to 24. 
+        The magnitude down from which to extract.  If 'None' ignores
+        magnitude filter.
 
 
     Checks
@@ -454,9 +509,6 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
 
     grism = glob.glob(field+'*G102_asn.fits')
 
-    if mag_lim == None:
-        mag_lim=24
-
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(
@@ -464,7 +516,7 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
             grow_factor=2, 
             growx=2, 
             growy=2, 
-            MAG_LIMIT=mag_lim,
+            MAG_LIMIT=24,
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False,
@@ -486,6 +538,48 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
                 # For 'Goods*plus' catalogs.
                 ids = tab['NUMBER']
 
+        for id, mag in zip(model.cat.id, model.cat.mag):
+            if mag_lim != None:
+                if (id in ids and mag <= mag_lim):   
+                    print("id, mag: ", id, mag)
+                    try:
+                        search='*-*-*-G102'
+                        print('searching %s*%05d.2D.fits'%(search, id))
+                        spec = Stack2D(
+                            id=np.int(id), 
+                            inverse=False, 
+                            scale=[1,99], 
+                            fcontam=2.,
+                            ref_wave = 1.05e4,
+                            root='{}-G102'.format(field), 
+                            search='*-*-*-G102', 
+                            files=None, 
+                            go=True, 
+                            new_contam=False)
+                    except:
+                        continue
+
+            else:
+                if (id in ids):
+                    print("id: ", id)
+                    try:
+                        search='*-*-*-G102'
+                        print('searching %s*%05d.2D.fits'%(search, id))
+                        spec = Stack2D(
+                            id=np.int(id), 
+                            inverse=False, 
+                            scale=[1,99], 
+                            fcontam=2.,
+                            ref_wave = 1.05e4,
+                            root='{}-G102'.format(field), 
+                            search='*-*-*-G102', 
+                            files=None, 
+                            go=True, 
+                            new_contam=False)
+                    except:
+                        continue
+
+        """
         for id in ids:
             if (id in model.cat.id):
                 #and (not os.path.exists(field+'-G102_{}.2D.fits'.format(id))):
@@ -505,6 +599,7 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
                         new_contam=False)
                 except:
                     continue
+        """
 
     #cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
 
@@ -536,7 +631,7 @@ def fit_redshifts_and_emissionlines(field, tab, cat):
             grow_factor=2, 
             growx=2, 
             growy=2, 
-            MAG_LIMIT=24, #=mag_lim
+            MAG_LIMIT=24,
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False,
@@ -592,7 +687,7 @@ def fit_redshifts_and_emissionlines(field, tab, cat):
 
 #------------------------------------------------------------------------------- 
 
-def cleanup_extractions(field, cat, catname, ref_filter):
+def cleanup_extractions(field, cat, catname, ref_filter, mag_lim=None):
     """ Moves all *1D*, *2D*, and *stack* files to a directory in Extractions
     named /<field>/<catalog>_yyyy-mm-dd/.
     Then tars the directory in Extractions.
@@ -609,28 +704,40 @@ def cleanup_extractions(field, cat, catname, ref_filter):
         Name of the catalog, for naming output directory.
     ref_filter : string
         Filter of the reference image.
+    mag_lim : int 
+        The magnitude down from which to extract.  If 'None' ignores
+        magnitude filter.
+
 
     """
     path_to_Extractions = paths['path_to_Extractions']
+
+    # Format extraction group name. If extractions done by magnitude limit,
+    # name after the limit. If done by catalog, name by catalog. 
+    if mag_lim == None:
+        basename = catname
+    else:
+        basename = 'maglim{}'.format(str(mag_lim))
 
     # add redshift and emission line fits
     files = glob.glob('*1D*') + glob.glob('*2D*') + glob.glob('*stack*')
     print(files)
 
-    dirname = os.path.join(path_to_Extractions, field, '{}_{}_{}'.format(catname, ref_filter,
+    dirname = os.path.join(path_to_Extractions, field, '{}_{}_{}'.format(basename, ref_filter,
         time.strftime('%Y-%m-%d')))
 
     #dirname = 'extractions_{}_{}'.format(catname, time.strftime('%d%B%Y'))
     if not os.path.isdir(dirname):
         os.mkdir(dirname)
 
-    print("Moving extractions from catalog {} to {}".format(catname, dirname))
+    print("Moving extractions from catalog {} to {}".format(basename, dirname))
 
     for f in files:
         shutil.move(f, os.path.join(dirname,f))
 
     # Now tar the directory.
-    shutil.make_archive(os.path.join(path_to_Extractions, field, '{}_extractions_{}_{}_plus'.format(field, catname, ref_filter)), 
+    shutil.make_archive(os.path.join(path_to_Extractions, field, 
+        '{}_extractions_{}_{}_plus'.format(field, basename, ref_filter)), 
         'gztar', dirname)
 
 
@@ -702,24 +809,24 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                 stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
             if 5 in do_steps:
                 fit_redshifts_and_emissionlines(field=field, tab=tab, cat=cat)
-                #cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
+                cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
             elif 4 in do_steps and 5 not in do_steps:
                 print("")
-                #cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)               
+                cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)               
         
 
 
 if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
-    fields = ['GN2'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
+    fields = ['GS5'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
     ref_filter = 'F125W'
-    mag_lim = 25 #None
+    mag_lim = 20 #None
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
     #do_steps = [1,2]
     #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
     do_steps = [3,4]
-    for cat in all_cats:
+    for cat in [full_cats]: #all_cats:
         clear_pipeline_main(
             fields=fields, 
             do_steps=do_steps, 
