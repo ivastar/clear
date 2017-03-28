@@ -358,6 +358,12 @@ def extract_clear(field, tab, mag_lim=None):
 
     grism = glob.glob(field+'*G102_asn.fits')
 
+    # Keep magnitude limit for contam models from being too low. 
+    if mag_lim == None or mag_lim < 24:
+        comtam_mag_lim = 24
+    else:
+        contam_mag_lim = mag_lim
+
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         # Takes a subset of the full catalog, retaining
@@ -367,14 +373,14 @@ def extract_clear(field, tab, mag_lim=None):
             grow_factor=2, 
             growx=2,
             growy=2, 
-            MAG_LIMIT=24,
+            MAG_LIMIT=contam_mag_lim,
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False, 
             model_slope=0, 
             direct='F105W', 
             grism='G102', 
-            BEAMS=['A', 'B', 'C', 'D','E'],
+            BEAMS=['A', 'B', 'C', 'D', 'E'],
             align_reference=False)
 
         try:
@@ -404,7 +410,7 @@ def extract_clear(field, tab, mag_lim=None):
                             grow=1, 
                             miny=-36, 
                             maxy=None, 
-                            CONTAMINATING_MAGLIMIT=23, 
+                            CONTAMINATING_MAGLIMIT=contam_mag_lim, 
                             refine=False, 
                             verbose=False, 
                             force_refine_nearby=False, 
@@ -427,7 +433,7 @@ def extract_clear(field, tab, mag_lim=None):
                             grow=1, 
                             miny=-36, 
                             maxy=None, 
-                            CONTAMINATING_MAGLIMIT=23, 
+                            CONTAMINATING_MAGLIMIT=contam_mag_lim, 
                             refine=False, 
                             verbose=False, 
                             force_refine_nearby=False, 
@@ -509,6 +515,12 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
 
     grism = glob.glob(field+'*G102_asn.fits')
 
+    # Keep magnitude limit for contam models from being too low. 
+    if mag_lim == None or mag_lim < 24:
+        comtam_mag_lim = 24
+    else:
+        contam_mag_lim = mag_lim
+
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(
@@ -516,7 +528,7 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
             grow_factor=2, 
             growx=2, 
             growy=2, 
-            MAG_LIMIT=24,
+            MAG_LIMIT=contam_mag_lim,
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False,
@@ -624,6 +636,12 @@ def fit_redshifts_and_emissionlines(field, tab, cat):
     """
     grism = glob.glob(field+'*G102_asn.fits')
 
+    # Keep magnitude limit for contam models from being too low. 
+    if mag_lim == None or mag_lim < 24:
+        comtam_mag_lim = 24
+    else:
+        contam_mag_lim = mag_lim
+
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
         model = unicorn.reduce.process_GrismModel(
@@ -631,7 +649,7 @@ def fit_redshifts_and_emissionlines(field, tab, cat):
             grow_factor=2, 
             growx=2, 
             growy=2, 
-            MAG_LIMIT=24,
+            MAG_LIMIT=contam_mag_lim,
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False,
