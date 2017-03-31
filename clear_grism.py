@@ -51,6 +51,8 @@ import time
 import threedhst
 import unicorn
 
+from unicorn import interlace_test
+
 from astropy.table import Table
 from astropy.io import ascii
 
@@ -253,9 +255,9 @@ def interlace_clear(field, ref_filter):
     print("*** interlace_clear step complete ***")
 
 
- #-------------------------------------------------------------------------------  
+#-------------------------------------------------------------------------------  
 
-def model_clear(field):
+def model_clear(field, mag_lim=None):
     """ Creates model contam images. 
 
     ** Step 2. of Interlace steps. **
@@ -264,6 +266,9 @@ def model_clear(field):
     ----------
     field : string
         The GOODS field to process. 
+    mag_lim : int 
+        The magnitude down from which to extract.  If 'None' ignores
+        magnitude filter.
 
     Produces
     --------
@@ -294,6 +299,11 @@ def model_clear(field):
     """
     grism_asn = glob.glob(field+'*G102_asn.fits')
     
+    if mag_lim == None or mag_lim < 24:
+        contam_mag_lim = 24
+    else:
+        contam_mag_lim = mag_lim
+
     for i in range(len(grism_asn)):
         root = grism_asn[i].split('-G102')[0]
         direct = 'F105W'
@@ -311,7 +321,7 @@ def model_clear(field):
             grow_factor=2, 
             growx=2, 
             growy=2, 
-            MAG_LIMIT=24, 
+            MAG_LIMIT=contam_mag_lim, 
             REFINE_MAG_LIMIT=21, 
             make_zeroth_model=False, 
             use_segm=False, 
@@ -360,7 +370,7 @@ def extract_clear(field, tab, mag_lim=None):
 
     # Keep magnitude limit for contam models from being too low. 
     if mag_lim == None or mag_lim < 24:
-        comtam_mag_lim = 24
+        contam_mag_lim = 24
     else:
         contam_mag_lim = mag_lim
 
@@ -368,34 +378,8 @@ def extract_clear(field, tab, mag_lim=None):
         root = grism[i].split('-G102')[0]
         # Takes a subset of the full catalog, retaining
         # only objects visible in the field (model.cat.id)
-        model = unicorn.reduce.process_GrismModel(
-            root=root, 
-            grow_factor=2, 
-            growx=2,
-            growy=2, 
-            MAG_LIMIT=contam_mag_lim,
-            REFINE_MAG_LIMIT=21, 
-            make_zeroth_model=False, 
-            use_segm=False, 
-            model_slope=0, 
-            direct='F105W', 
-            grism='G102', 
-            BEAMS=['A', 'B', 'C', 'D', 'E'],
-            align_reference=False)
-
-        try:
-            ids = tab['ID']
-        except:
-            try:
-                # Needed for the 'plux_z*' catalogs.
-                ids_raw = tab['id']
-                ids = []
-                for id in ids_raw:
-                    ids.append(id.split('_')[-1])
-            except:
-                # For 'Goods*plus' catalogs.
-                ids = tab['NUMBER']
-                print("Using Goods*plus catalog.")
+        model, ids = return_model_and_ids(
+            root=root, contam_mag_lim=contam_mag_lim, tab=tab)
 
         #print(model.cat.mag)
         #print(model.cat.id)
@@ -446,32 +430,6 @@ def extract_clear(field, tab, mag_lim=None):
                     except:
                         continue
 
-        """
-        for id in ids:
-
-            if (id in model.cat.id):
-
-                
-                try:
-                    model.twod_spectrum(
-                        id=id, 
-                        grow=1, 
-                        miny=-36, 
-                        maxy=None, 
-                        CONTAMINATING_MAGLIMIT=23, 
-                        refine=False, 
-                        verbose=False, 
-                        force_refine_nearby=False, 
-                        USE_REFERENCE_THUMB=True,
-                        USE_FLUX_RADIUS_SCALE=3, 
-                        BIG_THUMB=False, 
-                        extract_1d=True)
-                    model.show_2d(savePNG=True, verbose=True)
-                    print("Extracted {}".format(id))
-                except:
-                    continue
-        """
-
     print("*** extract_clear step complete ***")        
 
 
@@ -517,38 +475,14 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
 
     # Keep magnitude limit for contam models from being too low. 
     if mag_lim == None or mag_lim < 24:
-        comtam_mag_lim = 24
+        contam_mag_lim = 24
     else:
         contam_mag_lim = mag_lim
 
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
-        model = unicorn.reduce.process_GrismModel(
-            root=root, 
-            grow_factor=2, 
-            growx=2, 
-            growy=2, 
-            MAG_LIMIT=contam_mag_lim,
-            REFINE_MAG_LIMIT=21, 
-            make_zeroth_model=False, 
-            use_segm=False,
-            model_slope=0, 
-            direct='F105W', 
-            grism='G102', 
-            BEAMS=['A', 'B', 'C', 'D','E'],
-            align_reference=False)
-        try:
-            ids = tab['ID']
-        except:
-            try:
-                # Needed for the 'plux_z*' catalogs.
-                ids_raw = tab['id']
-                ids = []
-                for id in ids_raw:
-                    ids.append(id.split('_')[-1])
-            except:
-                # For 'Goods*plus' catalogs.
-                ids = tab['NUMBER']
+        model, ids = return_model_and_ids(
+            root=root, contam_mag_lim=contam_mag_lim, tab=tab)
 
         for id, mag in zip(model.cat.id, model.cat.mag):
             if mag_lim != None:
@@ -591,27 +525,6 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
                     except:
                         continue
 
-        """
-        for id in ids:
-            if (id in model.cat.id):
-                #and (not os.path.exists(field+'-G102_{}.2D.fits'.format(id))):
-                try:
-                    search='*-*-*-G102'
-                    print('searching %s*%05d.2D.fits'%(search, id))
-                    spec = Stack2D(
-                        id=np.int(id), 
-                        inverse=False, 
-                        scale=[1,99], 
-                        fcontam=2.,
-                        ref_wave = 1.05e4,
-                        root='{}-G102'.format(field), 
-                        search='*-*-*-G102', 
-                        files=None, 
-                        go=True, 
-                        new_contam=False)
-                except:
-                    continue
-        """
 
     #cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter)
 
@@ -620,7 +533,7 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
 
 #------------------------------------------------------------------------------- 
 
-def fit_redshifts_and_emissionlines(field, tab, cat):
+def fit_redshifts_and_emissionlines(field, tab, cat, mag_lim=None):
     """ Fits redshifts and emission lines. 
 
     Parameters
@@ -628,6 +541,15 @@ def fit_redshifts_and_emissionlines(field, tab, cat):
     field : string
         The GOODS field to process. Needs to know to reference GN or GS 
         catalog.
+    tab : dictionary
+        Values for each source from the catalog.
+    cat : dictionary
+        Keys are 'N' or 'S' and values are the string names of 
+        the catalog files.
+    mag_lim : int 
+        The magnitude down from which to extract.  If 'None' ignores
+        magnitude filter.
+
 
     Notes
     -----
@@ -638,69 +560,108 @@ def fit_redshifts_and_emissionlines(field, tab, cat):
 
     # Keep magnitude limit for contam models from being too low. 
     if mag_lim == None or mag_lim < 24:
-        comtam_mag_lim = 24
+        contam_mag_lim = 24
     else:
         contam_mag_lim = mag_lim
 
     for i in range(len(grism)):
         root = grism[i].split('-G102')[0]
-        model = unicorn.reduce.process_GrismModel(
-            root=root, 
-            grow_factor=2, 
-            growx=2, 
-            growy=2, 
-            MAG_LIMIT=contam_mag_lim,
-            REFINE_MAG_LIMIT=21, 
-            make_zeroth_model=False, 
-            use_segm=False,
-            model_slope=0, 
-            direct='F105W', 
-            grism='G102', 
-            BEAMS=['A', 'B', 'C', 'D','E'],
-            align_reference=False)
 
+        model, ids = return_model_and_ids(
+            root=root, contam_mag_lim=contam_mag_lim, tab=tab)
+
+        count = 0
+        for id in ids:
+            if (id in model.cat.id):
+                if count < 2:
+                    obj_root='{}-G102_{:05d}'.format(root, id)
+                    print("obj_root: ", obj_root)
+                    status = model.twod_spectrum(id, miny=40)
+                    if not status:
+                        continue
+                    #try:
+                        # Redshift fit
+                    gris = interlace_test.SimultaneousFit(
+                        obj_root,
+                        lowz_thresh=0.01, 
+                        FIGURE_FORMAT='png') 
+                    count += 1
+                    #except:
+                    #    continue
+                    
+                    
+                    if gris.status is False:
+                        continue
+
+                    if not os.path.exists(obj_root+'.new_zfit.pz.fits'):
+                        #try:
+                        gris.new_fit_constrained()
+                        gris.new_save_results()
+                        gris.make_2d_model()
+                        #except:
+                        #    continue
+                    if not os.path.exists(obj_root+'.linefit.fits'):
+                        #try:
+                            # Emission line fit
+                        gris.new_fit_free_emlines(ztry=None, NSTEP=600)
+                        #except:
+                        #    continue
+
+
+    print("*** fit redshifts and emission lines step complete ***")
+
+
+#-------------------------------------------------------------------------------
+
+def return_model_and_ids(root, contam_mag_lim, tab):
+    """ Returns the model object and list of ids of sources present in field.
+
+    Parameters
+    ----------
+    root : string
+        Root string <field>-<visit>-<orient>.
+    contam_mag_lim : int
+        The mag limit to bring contamination model.
+    tab : dictionary
+        Values for each source from the catalog.
+
+    Returns
+    -------
+    model : GrismModel
+        The GrismModel object for interlaced field.
+    ids : list
+        List of ids of sources present in field.
+
+    """
+    model = unicorn.reduce.process_GrismModel(
+        root=root, 
+        grow_factor=2, 
+        growx=2, 
+        growy=2, 
+        MAG_LIMIT=contam_mag_lim,
+        REFINE_MAG_LIMIT=21, 
+        make_zeroth_model=False, 
+        use_segm=False,
+        model_slope=0, 
+        direct='F105W', 
+        grism='G102', 
+        BEAMS=['A', 'B', 'C', 'D','E'],
+        align_reference=False)
+
+    try:
+        ids = tab['ID']
+    except:
         try:
-            ids = tab['ID']
-        except:
             # Needed for the 'plux_z*' catalogs.
             ids_raw = tab['id']
             ids = []
             for id in ids_raw:
                 ids.append(id.split('_')[-1])
+        except:
+            # For 'Goods*plus' catalogs.
+            ids = tab['NUMBER']
 
-        for id in ids:
-            if (id in model.cat.id):
-                obj_root='{}-G102_{:05d}'.format(root, id)
-                status = model.twod_spectrum(id, miny=40)
-                if not status:
-                    continue
-                try:
-                    # Redshift fit
-                    gris = test.SimultaneousFit(
-                        obj_root,
-                        lowz_thresh=0.01, 
-                        FIGURE_FORMAT='png') 
-                except:
-                    continue
-
-                if gris.status is False:
-                    continue
-
-                if not os.path.exists(obj_root+'.new_zfit.pz.fits'):
-                    try:
-                        gris.new_fit_constrained()
-                        gris.new_save_results()
-                        gris.make_2d_model()
-                    except:
-                        continue
-                if not os.path.exists(obj_root+'.linefit.fits'):
-                    try:
-                        # Emission line fit
-                        gris.new_fit_free_emlines(ztry=None, NSTEP=600)
-                    except:
-                        continue
-
-    print("*** fit redshifts and emission lines step complete ***")
+    return model, ids
 
 
 #------------------------------------------------------------------------------- 
@@ -772,6 +733,11 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
         catalog.
     do_steps : list of ints 
         The step numbers to perform.
+        1 - Interlace visits
+        2 - Create contam models
+        3 - Extract traces
+        4 - Stack traces
+        5 - Fit redshifts and emission lines of traces
     cats : dictionary
         Dictionaries of the field (N/S) and catalog name.
         To extract all mags to this limit from full catalog, select 
@@ -808,7 +774,7 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                     if 1 in do_steps:
                         interlace_clear(field=overlapping_field, ref_filter=ref_filter)
                     if 2 in do_steps:
-                        model_clear(field=overlapping_field)
+                        model_clear(field=overlapping_field, mag_lim=mag_lim)
                     if 3 in do_steps:
                         tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                         extract_clear(field=overlapping_field, tab=tab, mag_lim=mag_lim)
@@ -817,15 +783,17 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                 if 1 in do_steps:
                     interlace_clear(field=field, ref_filter=ref_filter)
                 if 2 in do_steps:
-                    model_clear(field=field)
+                    model_clear(field=field, mag_lim=mag_lim)
 
                 if 3 in do_steps:
                     tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                     extract_clear(field=field, tab=tab, mag_lim=mag_lim)
                 
             if 4 in do_steps:
+                tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                 stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
             if 5 in do_steps:
+                tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                 fit_redshifts_and_emissionlines(field=field, tab=tab, cat=cat)
                 cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
             elif 4 in do_steps and 5 not in do_steps:
@@ -838,12 +806,12 @@ if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
     fields = ['GS5'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
     ref_filter = 'F125W'
-    mag_lim = 20 #None
+    mag_lim = 26 #None
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
     #do_steps = [1,2]
     #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
-    do_steps = [3,4]
+    do_steps = [5] #[3,4]
     for cat in [full_cats]: #all_cats:
         clear_pipeline_main(
             fields=fields, 
