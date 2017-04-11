@@ -154,33 +154,33 @@ def interlace_clear(field, ref_filter):
 
     if 'ERSPRIME' in field:
         # ersprime does not appear on the smaller F105W GS reference image. So continue to use F125W's GS ref image.
-        CATALOG = path_to_REF + 'GoodsS_plus_merged.cat' #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
-        REF_IMAGE = path_to_REF + 'goodss_3dhst.v4.0.F125W_orig_sci.fits'
+        CATALOG = os.path.join(path_to_REF, 'GoodsS_plus_merged.cat') #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
+        REF_IMAGE = os.path.join(path_to_REF, 'goodss_3dhst.v4.0.F125W_orig_sci.fits')
         REF_EXT = 0
-        SEG_IMAGE = path_to_REF + 'Goods_S_plus_seg.fits' #'goodss_3dhst.v4.0.F160W_seg.fits'
+        SEG_IMAGE = os.path.join(path_to_REF, 'Goods_S_plus_seg.fits') #'goodss_3dhst.v4.0.F160W_seg.fits'
         REF_FILTER = 'F125W'
 
     elif 'GS' in field or 'GDS' in field:
-        CATALOG = path_to_REF + 'GoodsS_plus_merged.cat' #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
+        CATALOG = os.path.join(path_to_REF, 'GoodsS_plus_merged.cat') #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
         # F105W ref image only works for GS3 and GS4.
         REF_EXT = 0
-        SEG_IMAGE = path_to_REF + 'Goods_S_plus_seg.fits' #'goodss_3dhst.v4.0.F160W_seg.fits'
+        SEG_IMAGE = os.path.join(path_to_REF, 'Goods_S_plus_seg.fits') #'goodss_3dhst.v4.0.F160W_seg.fits'
         if ref_filter == 'F125W':
-            REF_IMAGE = path_to_REF + 'goodss_3dhst.v4.0.F125W_orig_sci.fits'  
+            REF_IMAGE = os.path.join(path_to_REF, 'goodss_3dhst.v4.0.F125W_orig_sci.fits')
             REF_FILTER = 'F125W'
         elif ref_filter == 'F105W':
-            REF_IMAGE = path_to_REF + 'gs_all_candels_ers_udf_f105w_060mas_v0.5_drz.trim.fits'
+            REF_IMAGE = os.path.join(path_to_REF, 'gs_all_candels_ers_udf_f105w_060mas_v0.5_drz.trim.fits')
             REF_FILTER = 'F105W'
 
     elif 'GN' in field or 'GDN' in field:
-        CATALOG = path_to_REF + 'GoodsN_plus_merged.cat' #'goodsn_3dhst.v4.0.F125W_conv.cat'
+        CATALOG = os.path.join(path_to_REF, 'GoodsN_plus_merged.cat') #'goodsn_3dhst.v4.0.F125W_conv.cat'
         REF_EXT = 0
-        SEG_IMAGE = path_to_REF + 'Goods_N_plus_seg.fits' #'goodsn_3dhst.v4.0.F160W_seg.fits'
+        SEG_IMAGE = os.path.join(path_to_REF, 'Goods_N_plus_seg.fits') #'goodsn_3dhst.v4.0.F160W_seg.fits'
         if ref_filter == 'F125W':
-            REF_IMAGE = path_to_REF + 'goodsn_3dhst.v4.0.F125W_orig_sci.fits'
+            REF_IMAGE = os.path.join(path_to_REF, 'goodsn_3dhst.v4.0.F125W_orig_sci.fits')
             REF_FILTER = 'F125W'
         elif ref_filter == 'F105W':
-            REF_IMAGE = path_to_REF + 'gn_all_candels_wfc3_f105w_060mas_v0.8_drz.fits'
+            REF_IMAGE = os.path.join(path_to_REF, 'gn_all_candels_wfc3_f105w_060mas_v0.8_drz.fits')
             REF_FILTER = 'F105W'
 
 
@@ -557,6 +557,7 @@ def fit_redshifts_and_emissionlines(field, tab, cat, mag_lim=None):
 
     """
     grism = glob.glob(field+'*G102_asn.fits')
+    print("Associations available for filed {}: {}".format(field, grism))
 
     # Keep magnitude limit for contam models from being too low. 
     if mag_lim == None or mag_lim < 24:
@@ -570,42 +571,41 @@ def fit_redshifts_and_emissionlines(field, tab, cat, mag_lim=None):
         model, ids = return_model_and_ids(
             root=root, contam_mag_lim=contam_mag_lim, tab=tab)
 
-        count = 0
         for id in ids:
-            if (id in model.cat.id):
-                if count < 2:
-                    obj_root='{}-G102_{:05d}'.format(root, id)
-                    print("obj_root: ", obj_root)
-                    status = model.twod_spectrum(id, miny=40)
-                    if not status:
-                        continue
+            if (id in ([38363])): #model.cat.id):
+                obj_root='{}-G102_{:05d}'.format(root, id)
+                print("obj_root: ", obj_root)
+                status = model.twod_spectrum(id, miny=40)
+                #if not status:
+                #    continue
+                #try:
+                    # Redshift fit
+                gris = interlace_test.SimultaneousFit(
+                    obj_root,
+                    lowz_thresh=0.01, 
+                    FIGURE_FORMAT='png') 
+                #except:
+                #    continue
+                
+                
+                #if gris.status is False:
+                #    continue
+
+                if not os.path.exists(obj_root + '.new_zfit.pz.fits'):
+                    print("Fitting z...")
                     #try:
-                        # Redshift fit
-                    gris = interlace_test.SimultaneousFit(
-                        obj_root,
-                        lowz_thresh=0.01, 
-                        FIGURE_FORMAT='png') 
-                    count += 1
+                    gris.new_fit_constrained()
+                    gris.new_save_results()
+                    gris.make_2d_model()
                     #except:
                     #    continue
-                    
-                    
-                    if gris.status is False:
-                        continue
-
-                    if not os.path.exists(obj_root+'.new_zfit.pz.fits'):
-                        #try:
-                        gris.new_fit_constrained()
-                        gris.new_save_results()
-                        gris.make_2d_model()
-                        #except:
-                        #    continue
-                    if not os.path.exists(obj_root+'.linefit.fits'):
-                        #try:
-                            # Emission line fit
-                        gris.new_fit_free_emlines(ztry=None, NSTEP=600)
-                        #except:
-                        #    continue
+                if not os.path.exists(obj_root+'.linefit.fits'):
+                    print("Fitting em lines...")
+                    #try:
+                        # Emission line fit
+                    gris.new_fit_free_emlines(ztry=None, NSTEP=600)
+                    #except:
+                    #    continue
 
 
     print("*** fit redshifts and emission lines step complete ***")
