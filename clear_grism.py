@@ -533,7 +533,7 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
 
 #------------------------------------------------------------------------------- 
 
-def fit_redshifts_and_emissionlines(field, tab, cat, mag_lim=None):
+def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
     """ Fits redshifts and emission lines. 
 
     Parameters
@@ -543,9 +543,6 @@ def fit_redshifts_and_emissionlines(field, tab, cat, mag_lim=None):
         catalog.
     tab : dictionary
         Values for each source from the catalog.
-    cat : dictionary
-        Keys are 'N' or 'S' and values are the string names of 
-        the catalog files.
     mag_lim : int 
         The magnitude down from which to extract.  If 'None' ignores
         magnitude filter.
@@ -556,8 +553,8 @@ def fit_redshifts_and_emissionlines(field, tab, cat, mag_lim=None):
     Based on lines 182-207 of unicorn/aws.py
 
     """
-    grism = glob.glob(field+'*G102_asn.fits')
-    print("Associations available for filed {}: {}".format(field, grism))
+    # add way to copy all 1D and 2D files from latest extraction for field? 
+
 
     # Keep magnitude limit for contam models from being too low. 
     if mag_lim == None or mag_lim < 24:
@@ -565,27 +562,47 @@ def fit_redshifts_and_emissionlines(field, tab, cat, mag_lim=None):
     else:
         contam_mag_lim = mag_lim
 
-    for i in range(len(grism)):
-        root = grism[i].split('-G102')[0]
+    # Get all visit assocations for the pointing.
+    asns = glob.glob(field+'*G102_asn.fits')
+    print("Associations for field {} :".format(field, asns))
 
+    # Find the unique root for the pointing, for its stacked 2D.fits.
+    twods = glob.glob('{}-G102_*.2D.fits'.format(field))
+    print(twods)
+    pointing_root = np.unique(np.array([twod.split('_')[0] for twod in twods]))[0]
+
+    # Get IDs of all the sources stacked.
+    stacked_ids = np.array([twod.split('_')[1].split('.2D.fits')[0] for twod in twods], dtype=int)
+    print("stacked_ids: ")
+    print(stacked_ids)
+
+    # Master list of ids. Keep track of those already fitted from the stacked
+    # 2D FITS files, so not repeating a source over and over.
+    used_ids = []
+
+    for asn in asns:
+        asn_root = asn.split('-G102')[0]
         model, ids = return_model_and_ids(
-            root=root, contam_mag_lim=contam_mag_lim, tab=tab)
+            root=asn_root, contam_mag_lim=contam_mag_lim, tab=tab)
 
         for id in ids:
-            if (id in ([38363])): #model.cat.id):
-                obj_root='{}-G102_{:05d}'.format(root, id)
+            if (id in stacked_ids) and (id not in used_ids): 
+                used_ids.append(id)
+
+                obj_root='{}_{:05d}'.format(pointing_root, id)
                 print("obj_root: ", obj_root)
                 status = model.twod_spectrum(id, miny=40)
-                #if not status:
-                #    continue
-                #try:
+                if not status:
+                    continue
+                try:
                     # Redshift fit
-                gris = interlace_test.SimultaneousFit(
-                    obj_root,
-                    lowz_thresh=0.01, 
-                    FIGURE_FORMAT='png') 
-                #except:
-                #    continue
+                    gris = interlace_test.SimultaneousFit(
+                        obj_root,
+                        lowz_thresh=0.01, 
+                        FIGURE_FORMAT='png') 
+                except ValueError:
+                    print("ValueError in SimultansousFit of {}".format(obj_root))
+                    continue
                 
                 
                 #if gris.status is False:
@@ -593,12 +610,12 @@ def fit_redshifts_and_emissionlines(field, tab, cat, mag_lim=None):
 
                 if not os.path.exists(obj_root + '.new_zfit.pz.fits'):
                     print("Fitting z...")
-                    #try:
-                    gris.new_fit_constrained()
-                    gris.new_save_results()
-                    gris.make_2d_model()
-                    #except:
-                    #    continue
+                    try:
+                        gris.new_fit_constrained()
+                        gris.new_save_results()
+                        gris.make_2d_model()
+                    except:
+                        continue
                 if not os.path.exists(obj_root+'.linefit.fits'):
                     print("Fitting em lines...")
                     #try:
@@ -698,8 +715,8 @@ def cleanup_extractions(field, cat, catname, ref_filter, mag_lim=None):
     else:
         basename = 'maglim{}'.format(str(mag_lim))
 
-    # add redshift and emission line fits
-    files = glob.glob('*1D*') + glob.glob('*2D*') + glob.glob('*stack*')
+    files = list(set(glob.glob('*1D.fits') + glob.glob('*2D.fits') + glob.glob('*stack*') + \
+        glob.glob('*zfit*') + glob.glob('*linefit*')))
     print(files)
 
     dirname = os.path.join(path_to_Extractions, field, '{}_{}_{}'.format(basename, ref_filter,
@@ -794,7 +811,7 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                 stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
             if 5 in do_steps:
                 tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
-                fit_redshifts_and_emissionlines(field=field, tab=tab, cat=cat)
+                fit_redshifts_and_emissionlines(field=field, tab=tab)
                 cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
             elif 4 in do_steps and 5 not in do_steps:
                 print("")
@@ -806,12 +823,12 @@ if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
     fields = ['GS5'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
     ref_filter = 'F125W'
-    mag_lim = 26 #None
+    mag_lim = 25 #None
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
     #do_steps = [1,2]
     #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
-    do_steps = [5] #[3,4]
+    do_steps = [5] 
     for cat in [full_cats]: #all_cats:
         clear_pipeline_main(
             fields=fields, 
