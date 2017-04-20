@@ -60,6 +60,7 @@ from find_pointing_start import find_pointing_start
 from set_paths import paths
 
 # Define catalogs for S and N.
+# These are only needed to extract subsets of source IDs.
 quiescent_cats = {'N' : ['UVJ_quiescent_goodsn.dat'], 
                   'S' : ['UVJ_quiescent_goodss.dat'], 
                   'name' : ['quiescent']}
@@ -151,36 +152,31 @@ def interlace_clear(field, ref_filter):
     else:
         pad = 60
 
-
-    if 'ERSPRIME' in field:
-        # ersprime does not appear on the smaller F105W GS reference image. So continue to use F125W's GS ref image.
-        CATALOG = os.path.join(path_to_REF, 'GoodsS_plus_merged.cat') #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
-        REF_IMAGE = os.path.join(path_to_REF, 'goodss_3dhst.v4.0.F125W_orig_sci.fits')
-        REF_EXT = 0
-        SEG_IMAGE = os.path.join(path_to_REF, 'Goods_S_plus_seg.fits') #'goodss_3dhst.v4.0.F160W_seg.fits'
-        REF_FILTER = 'F125W'
-
-    elif 'GS' in field or 'GDS' in field:
-        CATALOG = os.path.join(path_to_REF, 'GoodsS_plus_merged.cat') #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
-        # F105W ref image only works for GS3 and GS4.
+    if 'GS' in field or 'GDS' in field or 'ERSPRIME' in field:
         REF_EXT = 0
         SEG_IMAGE = os.path.join(path_to_REF, 'Goods_S_plus_seg.fits') #'goodss_3dhst.v4.0.F160W_seg.fits'
         if ref_filter == 'F125W':
+            CATALOG = os.path.join(path_to_REF, 'GoodsS_plus_merged.cat') #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
             REF_IMAGE = os.path.join(path_to_REF, 'goodss_3dhst.v4.0.F125W_orig_sci.fits')
             REF_FILTER = 'F125W'
         elif ref_filter == 'F105W':
-            REF_IMAGE = os.path.join(path_to_REF, 'gs_all_candels_ers_udf_f105w_060mas_v0.5_drz.trim.fits')
+            print("Using F105W!")
+            CATALOG = os.path.join(path_to_REF, 'goodss-F105W-astrodrizzle-v4.3_drz_sub_plus.cat')
+            # The new ref image. 
+            REF_IMAGE = os.path.join(path_to_REF, 'goodss-F105W-astrodrizzle-v4.3_drz_sci.fits')
             REF_FILTER = 'F105W'
 
     elif 'GN' in field or 'GDN' in field:
-        CATALOG = os.path.join(path_to_REF, 'GoodsN_plus_merged.cat') #'goodsn_3dhst.v4.0.F125W_conv.cat'
         REF_EXT = 0
         SEG_IMAGE = os.path.join(path_to_REF, 'Goods_N_plus_seg.fits') #'goodsn_3dhst.v4.0.F160W_seg.fits'
         if ref_filter == 'F125W':
+            CATALOG = os.path.join(path_to_REF, 'GoodsN_plus_merged.cat') #'goodsn_3dhst.v4.0.F125W_conv.cat'
             REF_IMAGE = os.path.join(path_to_REF, 'goodsn_3dhst.v4.0.F125W_orig_sci.fits')
             REF_FILTER = 'F125W'
         elif ref_filter == 'F105W':
-            REF_IMAGE = os.path.join(path_to_REF, 'gn_all_candels_wfc3_f105w_060mas_v0.8_drz.fits')
+            CATALOG = os.path.join(path_to_REF, 'goodsn-F105W-astrodrizzle-v4.3_drz_sub_plus.cat')
+            # The new ref image.
+            REF_IMAGE = os.path.join(path_to_REF, 'goodsn-F105W-astrodrizzle-v4.3_drz_sci.fits')
             REF_FILTER = 'F105W'
 
 
@@ -301,7 +297,7 @@ def model_clear(field, mag_lim=None):
     
     if mag_lim == None or mag_lim < 24:
         contam_mag_lim = 24
-    else:
+    else:       
         contam_mag_lim = mag_lim
 
     for i in range(len(grism_asn)):
@@ -435,7 +431,7 @@ def extract_clear(field, tab, mag_lim=None):
 
 #-------------------------------------------------------------------------------  
 
-def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
+def stack_clear(field, tab, catname, ref_filter, mag_lim=None):
     """ Stacks the extractions for all the sources in the given field.
 
     Parameters
@@ -445,9 +441,6 @@ def stack_clear(field, tab, cat, catname, ref_filter, mag_lim=None):
         catalog.
     tab : dictionary
         Values for each source from the catalog.
-    cat : dictionary
-        Keys are 'N' or 'S' and values are the string names of 
-        the catalog files.
     catname : string
         Name of the catalog, for naming output directory.
     ref_filter : string
@@ -604,7 +597,6 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
                     print("ValueError in SimultansousFit of {}".format(obj_root))
                     continue
                 
-                
                 #if gris.status is False:
                 #    continue
 
@@ -683,7 +675,7 @@ def return_model_and_ids(root, contam_mag_lim, tab):
 
 #------------------------------------------------------------------------------- 
 
-def cleanup_extractions(field, cat, catname, ref_filter, mag_lim=None):
+def cleanup_extractions(field, catname, ref_filter, mag_lim=None):
     """ Moves all *1D*, *2D*, and *stack* files to a directory in Extractions
     named /<field>/<catalog>_yyyy-mm-dd/.
     Then tars the directory in Extractions.
@@ -693,9 +685,6 @@ def cleanup_extractions(field, cat, catname, ref_filter, mag_lim=None):
     field : string
         The GOODS field to process. Needs to know to reference GN or GS 
         catalog.
-    cat : dictionary
-        Keys are 'N' or 'S' and values are the string names of 
-        the catalog files.
     catname : string
         Name of the catalog, for naming output directory.
     ref_filter : string
@@ -735,6 +724,192 @@ def cleanup_extractions(field, cat, catname, ref_filter, mag_lim=None):
     shutil.make_archive(os.path.join(path_to_Extractions, field, 
         '{}_extractions_{}_{}_plus'.format(field, basename, ref_filter)), 
         'gztar', dirname)
+
+
+#-------------------------------------------------------------------------------  
+
+def sort_outputs(field, catname, ref_filter, mag_lim=None):
+    """ Sorts outputs into following tree of directories in Extractions.
+    The primary branch of each (the pointing/field) will be tarred. 
+
+    POINTING_REFFILTER_DATE
+        ORIENT1
+            ...
+        ORIENT2
+            1D
+                FITS
+            2D
+                FITS
+                PNG
+        ...
+        COMBINED
+            1D
+                FITS
+            2D
+                FITS
+                PNG
+            LINEFIT
+                DAT
+                FITS
+                PNG
+                CHAIN_PNG
+            ZFIT
+                DAT
+                FITS
+                PNG
+                PZ_FITS
+                2D_FITS
+                TILT_DAT
+                TILT_PNG
+
+    Parameters
+    ----------
+    field : string
+        The GOODS field to process. Needs to know to reference GN or GS 
+        catalog.
+    catname : string
+        Name of the catalog, for naming output directory.
+    ref_filter : string
+        Filter of the reference image.
+    mag_lim : int 
+        The magnitude down from which to extract.  If 'None' ignores
+        magnitude filter.
+
+    """ 
+
+    path_to_Extractions = paths['path_to_Extractions']
+
+    # Create the top-level name for the extractions.
+    # Format extraction group name. If extractions done by magnitude limit,
+    # name after the limit. If done by catalog, name by catalog. 
+    if mag_lim == None:
+        basename = catname
+    else:
+        basename = 'maglim{}'.format(str(mag_lim)) 
+
+    topdir = os.path.join(path_to_Extractions, field, '{}_{}_{}'.format(basename, ref_filter,
+        time.strftime('%Y-%m-%d')))
+
+    if not os.path.isdir(topdir):
+        os.mkdir(topdir)
+
+    # Glob all the ORIENT-specific 1D FITS files.
+    orient_1D = glob.glob('{}-[0-9]*1D.fits'.format(field.upper()))
+
+    # Glob all the ORIENT-specific 2D FITS and PNG files.
+    orient_2D = glob.glob('{}-[0-9]*2D.fits'.format(field.upper())) + \
+        glob.glob('{}-[0-9]*2D.png'.format(field.upper()))
+
+    # These files need be sorted and moved by visit, 'bottomdir', and extension.
+    check_and_create_dirs(file_list=orient_1D, topdir=topdir, 
+        bottomdir='1D', orient=True, overwrite_ext=None)
+    check_and_create_dirs(file_list=orient_2D, topdir=topdir, 
+        bottomdir='2D', orient=True, overwrite_ext=None)
+
+    # This finishes sorting the ORIENTS.
+    # Next on to the COMBINED, which are more numerous and varied. 
+    comb_1D = glob.glob('{}-G102*1D.fits'.format(field.upper()))
+    comb_2D = glob.glob('{}-G102*2D.fits'.format(field.upper())) + \
+        glob.glob('{}-G102*stack.png'.format(field.upper()))
+    comb_linefit = glob.glob('{}-G102*linefit.dat'.format(field.upper())) + \
+        glob.glob('{}-G102*linefit.fits'.format(field.upper())) + \
+        glob.glob('{}-G102*linefit.png'.format(field.upper()))
+    comb_linefit_chain = glob.glob('{}-G102*linefit.chain.png'.format(field.upper()))
+    comb_zfit = glob.glob('{}-G102*zfit.dat'.format(field.upper())) + \
+        glob.glob('{}-G102*zfit.fits'.format(field.upper())) + \
+        glob.glob('{}-G102*zfit.png'.format(field.upper()))
+    comb_zfit_pz = glob.glob('{}-G102*zfit.pz.fits'.format(field.upper())) 
+    comb_zfit_2D = glob.glob('{}-G102*zfit.2D.png'.format(field.upper())) 
+    comb_zfit_tilt_dat = glob.glob('{}-G102*zfit_tilt.dat'.format(field.upper())) 
+    comb_zfit_tilt_png = glob.glob('{}-G102*zfit_tilt.png'.format(field.upper())) 
+
+    # Sort and move files. 
+    check_and_create_dirs(file_list=comb_1D, topdir=topdir, 
+        bottomdir='1D', orient=False, overwrite_ext=None)
+    check_and_create_dirs(file_list=comb_2D, topdir=topdir, 
+        bottomdir='2D', orient=False, overwrite_ext=None)
+    check_and_create_dirs(file_list=comb_linefit, topdir=topdir, 
+        bottomdir='LINEFIT', orient=False, overwrite_ext=None)
+    check_and_create_dirs(file_list=comb_linefit_chain, topdir=topdir, 
+        bottomdir='LINEFIT', orient=False, overwrite_ext='CHAIN_PNG')
+    check_and_create_dirs(file_list=comb_zfit, topdir=topdir, 
+        bottomdir='ZFIT', orient=False, overwrite_ext=None)
+    check_and_create_dirs(file_list=comb_zfit_pz, topdir=topdir, 
+        bottomdir='ZFIT', orient=False, overwrite_ext='PZ_FITS')
+    check_and_create_dirs(file_list=comb_zfit_2D, topdir=topdir, 
+        bottomdir='ZFIT', orient=False, overwrite_ext='2D_FITS')
+    check_and_create_dirs(file_list=comb_zfit_tilt_dat, topdir=topdir, 
+        bottomdir='ZFIT', orient=False, overwrite_ext='TILT_DAT')
+    check_and_create_dirs(file_list=comb_zfit_tilt_png, topdir=topdir, 
+        bottomdir='ZFIT', orient=False, overwrite_ext='TILT_PNG')
+
+    # Now tar the top-level directory.
+    #shutil.make_archive(os.path.join(path_to_Extractions, field, 
+    #    '{}_{}_ref{}'.format(field, basename, ref_filter)), 
+    #    'gztar', topdir)
+
+
+#-------------------------------------------------------------------------------  
+
+def check_and_create_dirs(file_list, topdir, bottomname, orient=True, 
+    overwrite_ext=None):
+    """ Creates levels of directories, sorts, and moves files.
+
+    Parameters
+    ----------
+    file_list : list of strings
+        List of files to sort and move.
+    topdir : string
+        The top-most path+directory. 
+    bottomdir : string
+        Name of the bottom directory. E.g., '1D', 'ZFIT', etc.
+    orient : {True, False}
+        Keep True if the directory between top and bottom is to be
+        named for a visit. Turn False if that directory is to be
+        'COMBINED'.
+    overwrite_ext : string
+        Keep 'None' if you want to directory under 'bottomdir' to be named
+        after the file's extension. E.g., 'FITS', 'PNG', 'DAT'.
+        Otherwise, enter the string you would like this directory to be
+        named. 
+    """
+    for f in file_list:    
+        visit = f.split('-')[1]
+        program = f.split('-')[0]
+
+        if orient:
+            # Create directory for that visit, if it doesn't exist.
+            # Will need special case for images from 3DHST.
+            if 'GDN' in program:
+                visitdir = os.path.join(topdir, '3dhst-{}'.format(visit))
+            else:
+                visitdir = os.path.join(topdir, 'clear-{}'.format(visit))
+        else:
+            # Assume the directory with be COMBINED
+            visitdir = os.path.join(topdir, 'COMBINED')
+
+        if not os.path.isdir(visitdir):
+            os.mkdir(visitdir)
+
+        # Now check whether the bottomdir directory exists.
+        bottomdir = os.path.join(visitdir, bottomname)
+        if not os.path.isdir(bottomdir):
+            os.mkdir(bottomdir)
+
+        # Finally! Sort by the extension.
+        if overwrite_ext == None:
+            ext = (f.split('.')[-1]).upper()
+        else:
+            ext = overwrite_ext
+
+        extdir = os.path.join(bottomdir, ext)
+        if not os.path.isdir(extdir):
+            os.mkdir(extdir)
+
+        print("Moving {} to {}".format(f, extdir))
+        shutil.move(f, os.path.join(extdir, f))
+
+    
 
 
 #-------------------------------------------------------------------------------  
@@ -808,27 +983,27 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                 
             if 4 in do_steps:
                 tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
-                stack_clear(field=field, tab=tab, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
+                stack_clear(field=field, tab=tab, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
             if 5 in do_steps:
                 tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                 fit_redshifts_and_emissionlines(field=field, tab=tab)
-                cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
+                cleanup_extractions(field=field, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
             elif 4 in do_steps and 5 not in do_steps:
                 print("")
-                cleanup_extractions(field=field, cat=cat, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)               
+                cleanup_extractions(field=field, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)               
         
 
 
 if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
-    fields = ['GS5'] #['GS1', 'GS2', 'GS3', 'GS4', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
-    ref_filter = 'F125W'
+    fields = ['GN1'] #, 'GS1', 'GS2', 'GS3', 'GS4'] #, 'GS5', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
+    ref_filter = 'F105W' #'F125W'
     mag_lim = 25 #None
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
     #do_steps = [1,2]
     #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
-    do_steps = [5] 
+    do_steps = [1,2] #,5] 
     for cat in [full_cats]: #all_cats:
         clear_pipeline_main(
             fields=fields, 
