@@ -156,11 +156,12 @@ def interlace_clear(field, ref_filter):
         REF_EXT = 0
         SEG_IMAGE = os.path.join(path_to_REF, 'Goods_S_plus_seg.fits') #'goodss_3dhst.v4.0.F160W_seg.fits'
         if ref_filter == 'F125W':
+            print("Using ref F125W!")
             CATALOG = os.path.join(path_to_REF, 'GoodsS_plus_merged.cat') #'goodss_3dhst.v4.0.F125W_conv_fix.cat'
             REF_IMAGE = os.path.join(path_to_REF, 'goodss_3dhst.v4.0.F125W_orig_sci.fits')
             REF_FILTER = 'F125W'
         elif ref_filter == 'F105W':
-            print("Using F105W!")
+            print("Using ref F105W!")
             CATALOG = os.path.join(path_to_REF, 'goodss-F105W-astrodrizzle-v4.3_drz_sub_plus.cat')
             # The new ref image. 
             REF_IMAGE = os.path.join(path_to_REF, 'goodss-F105W-astrodrizzle-v4.3_drz_sci.fits')
@@ -170,13 +171,15 @@ def interlace_clear(field, ref_filter):
         REF_EXT = 0
         SEG_IMAGE = os.path.join(path_to_REF, 'Goods_N_plus_seg.fits') #'goodsn_3dhst.v4.0.F160W_seg.fits'
         if ref_filter == 'F125W':
+            print("Using ref F125W!")
             CATALOG = os.path.join(path_to_REF, 'GoodsN_plus_merged.cat') #'goodsn_3dhst.v4.0.F125W_conv.cat'
             REF_IMAGE = os.path.join(path_to_REF, 'goodsn_3dhst.v4.0.F125W_orig_sci.fits')
             REF_FILTER = 'F125W'
         elif ref_filter == 'F105W':
-            CATALOG = os.path.join(path_to_REF, 'goodsn-F105W-astrodrizzle-v4.3_drz_sub_plus.cat')
+            print("Using ref F105W!")
+            CATALOG = os.path.join(path_to_REF, 'goodsn-F105W-astrodrizzle-v4.4_drz_sub_plus.cat')
             # The new ref image.
-            REF_IMAGE = os.path.join(path_to_REF, 'goodsn-F105W-astrodrizzle-v4.3_drz_sci.fits')
+            REF_IMAGE = os.path.join(path_to_REF, 'goodsn-F105W-astrodrizzle-v4.4_drz_sci.fits')
             REF_FILTER = 'F105W'
 
 
@@ -593,9 +596,12 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
                         obj_root,
                         lowz_thresh=0.01, 
                         FIGURE_FORMAT='png') 
-                except ValueError:
-                    print("ValueError in SimultansousFit of {}".format(obj_root))
+                except (ValueError, IndexError) as err:
+                    #print("ValueError in SimultansousFit of {}".format(obj_root))
+                    print(err)
+                    print("Error in {}; skipping...".format(obj_root))
                     continue
+
                 
                 #if gris.status is False:
                 #    continue
@@ -673,59 +679,6 @@ def return_model_and_ids(root, contam_mag_lim, tab):
     return model, ids
 
 
-#------------------------------------------------------------------------------- 
-
-def cleanup_extractions(field, catname, ref_filter, mag_lim=None):
-    """ Moves all *1D*, *2D*, and *stack* files to a directory in Extractions
-    named /<field>/<catalog>_yyyy-mm-dd/.
-    Then tars the directory in Extractions.
-
-    Parameters
-    ----------
-    field : string
-        The GOODS field to process. Needs to know to reference GN or GS 
-        catalog.
-    catname : string
-        Name of the catalog, for naming output directory.
-    ref_filter : string
-        Filter of the reference image.
-    mag_lim : int 
-        The magnitude down from which to extract.  If 'None' ignores
-        magnitude filter.
-
-
-    """
-    path_to_Extractions = paths['path_to_Extractions']
-
-    # Format extraction group name. If extractions done by magnitude limit,
-    # name after the limit. If done by catalog, name by catalog. 
-    if mag_lim == None:
-        basename = catname
-    else:
-        basename = 'maglim{}'.format(str(mag_lim))
-
-    files = list(set(glob.glob('*1D.fits') + glob.glob('*2D.fits') + glob.glob('*stack*') + \
-        glob.glob('*zfit*') + glob.glob('*linefit*')))
-    print(files)
-
-    dirname = os.path.join(path_to_Extractions, field, '{}_{}_{}'.format(basename, ref_filter,
-        time.strftime('%Y-%m-%d')))
-
-    #dirname = 'extractions_{}_{}'.format(catname, time.strftime('%d%B%Y'))
-    if not os.path.isdir(dirname):
-        os.mkdir(dirname)
-
-    print("Moving extractions from catalog {} to {}".format(basename, dirname))
-
-    for f in files:
-        shutil.move(f, os.path.join(dirname,f))
-
-    # Now tar the directory.
-    shutil.make_archive(os.path.join(path_to_Extractions, field, 
-        '{}_extractions_{}_{}_plus'.format(field, basename, ref_filter)), 
-        'gztar', dirname)
-
-
 #-------------------------------------------------------------------------------  
 
 def sort_outputs(field, catname, ref_filter, mag_lim=None):
@@ -787,7 +740,7 @@ def sort_outputs(field, catname, ref_filter, mag_lim=None):
     else:
         basename = 'maglim{}'.format(str(mag_lim)) 
 
-    topdir = os.path.join(path_to_Extractions, field, '{}_{}_{}'.format(basename, ref_filter,
+    topdir = os.path.join(path_to_Extractions, field, '{}_ref{}_{}'.format(basename, ref_filter,
         time.strftime('%Y-%m-%d')))
 
     if not os.path.isdir(topdir):
@@ -802,9 +755,9 @@ def sort_outputs(field, catname, ref_filter, mag_lim=None):
 
     # These files need be sorted and moved by visit, 'bottomdir', and extension.
     check_and_create_dirs(file_list=orient_1D, topdir=topdir, 
-        bottomdir='1D', orient=True, overwrite_ext=None)
+        bottomname='1D', orient=True, overwrite_ext=None)
     check_and_create_dirs(file_list=orient_2D, topdir=topdir, 
-        bottomdir='2D', orient=True, overwrite_ext=None)
+        bottomname='2D', orient=True, overwrite_ext=None)
 
     # This finishes sorting the ORIENTS.
     # Next on to the COMBINED, which are more numerous and varied. 
@@ -825,28 +778,28 @@ def sort_outputs(field, catname, ref_filter, mag_lim=None):
 
     # Sort and move files. 
     check_and_create_dirs(file_list=comb_1D, topdir=topdir, 
-        bottomdir='1D', orient=False, overwrite_ext=None)
+        bottomname='1D', orient=False, overwrite_ext=None)
     check_and_create_dirs(file_list=comb_2D, topdir=topdir, 
-        bottomdir='2D', orient=False, overwrite_ext=None)
+        bottomname='2D', orient=False, overwrite_ext=None)
     check_and_create_dirs(file_list=comb_linefit, topdir=topdir, 
-        bottomdir='LINEFIT', orient=False, overwrite_ext=None)
+        bottomname='LINEFIT', orient=False, overwrite_ext=None)
     check_and_create_dirs(file_list=comb_linefit_chain, topdir=topdir, 
-        bottomdir='LINEFIT', orient=False, overwrite_ext='CHAIN_PNG')
+        bottomname='LINEFIT', orient=False, overwrite_ext='CHAIN_PNG')
     check_and_create_dirs(file_list=comb_zfit, topdir=topdir, 
-        bottomdir='ZFIT', orient=False, overwrite_ext=None)
+        bottomname='ZFIT', orient=False, overwrite_ext=None)
     check_and_create_dirs(file_list=comb_zfit_pz, topdir=topdir, 
-        bottomdir='ZFIT', orient=False, overwrite_ext='PZ_FITS')
+        bottomname='ZFIT', orient=False, overwrite_ext='PZ_FITS')
     check_and_create_dirs(file_list=comb_zfit_2D, topdir=topdir, 
-        bottomdir='ZFIT', orient=False, overwrite_ext='2D_FITS')
+        bottomname='ZFIT', orient=False, overwrite_ext='2D_FITS')
     check_and_create_dirs(file_list=comb_zfit_tilt_dat, topdir=topdir, 
-        bottomdir='ZFIT', orient=False, overwrite_ext='TILT_DAT')
+        bottomname='ZFIT', orient=False, overwrite_ext='TILT_DAT')
     check_and_create_dirs(file_list=comb_zfit_tilt_png, topdir=topdir, 
-        bottomdir='ZFIT', orient=False, overwrite_ext='TILT_PNG')
+        bottomname='ZFIT', orient=False, overwrite_ext='TILT_PNG')
 
     # Now tar the top-level directory.
-    #shutil.make_archive(os.path.join(path_to_Extractions, field, 
-    #    '{}_{}_ref{}'.format(field, basename, ref_filter)), 
-    #    'gztar', topdir)
+    shutil.make_archive(os.path.join(path_to_Extractions, field, 
+        '{}_{}_ref{}'.format(field, basename, ref_filter)), 
+        'gztar', topdir)
 
 
 #-------------------------------------------------------------------------------  
@@ -910,7 +863,6 @@ def check_and_create_dirs(file_list, topdir, bottomname, orient=True,
         shutil.move(f, os.path.join(extdir, f))
 
     
-
 
 #-------------------------------------------------------------------------------  
 #-------------------------------------------------------------------------------  
@@ -987,23 +939,23 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
             if 5 in do_steps:
                 tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                 fit_redshifts_and_emissionlines(field=field, tab=tab)
-                cleanup_extractions(field=field, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
+                sort_outputs(field=field, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
             elif 4 in do_steps and 5 not in do_steps:
                 print("")
-                cleanup_extractions(field=field, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)               
+                sort_outputs(field=field, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)           
         
 
 
 if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
-    fields = ['GN1'] #, 'GS1', 'GS2', 'GS3', 'GS4'] #, 'GS5', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
+    fields = ['GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] #, 'GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
     ref_filter = 'F105W' #'F125W'
     mag_lim = 25 #None
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
     #do_steps = [1,2]
     #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
-    do_steps = [1,2] #,5] 
+    do_steps = [3,4,5] 
     for cat in [full_cats]: #all_cats:
         clear_pipeline_main(
             fields=fields, 
