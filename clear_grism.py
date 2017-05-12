@@ -560,7 +560,7 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
 
     # Get all visit assocations for the pointing.
     asns = glob.glob(field+'*G102_asn.fits')
-    print("Associations for field {} :".format(field, asns))
+    print("Associations for field {} : {}".format(field, asns))
 
     # Find the unique root for the pointing, for its stacked 2D.fits.
     twods = glob.glob('{}-G102_*.2D.fits'.format(field))
@@ -576,7 +576,9 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
     # 2D FITS files, so not repeating a source over and over.
     used_ids = []
 
+    # should we be looping over associations?? 
     for asn in asns:
+        used_ids = []
         asn_root = asn.split('-G102')[0]
         model, ids = return_model_and_ids(
             root=asn_root, contam_mag_lim=contam_mag_lim, tab=tab)
@@ -596,7 +598,7 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
                         obj_root,
                         lowz_thresh=0.01, 
                         FIGURE_FORMAT='png') 
-                except (ValueError, IndexError) as err:
+                except (ValueError) as err: #, IndexError) as err:
                     #print("ValueError in SimultansousFit of {}".format(obj_root))
                     print(err)
                     print("Error in {}; skipping...".format(obj_root))
@@ -681,7 +683,7 @@ def return_model_and_ids(root, contam_mag_lim, tab):
 
 #-------------------------------------------------------------------------------  
 
-def sort_outputs(field, catname, ref_filter, mag_lim=None):
+def sort_outputs(field, overlapping_field, catname, ref_filter, mag_lim=None):
     """ Sorts outputs into following tree of directories in Extractions.
     The primary branch of each (the pointing/field) will be tarred. 
 
@@ -720,6 +722,9 @@ def sort_outputs(field, catname, ref_filter, mag_lim=None):
     field : string
         The GOODS field to process. Needs to know to reference GN or GS 
         catalog.
+    overlapping_field : string
+        Should be None, unless the field is from 3DHST, so that the 1D and 2D
+        files can be appropriately sorted. 
     catname : string
         Name of the catalog, for naming output directory.
     ref_filter : string
@@ -745,13 +750,30 @@ def sort_outputs(field, catname, ref_filter, mag_lim=None):
 
     if not os.path.isdir(topdir):
         os.mkdir(topdir)
+  
 
-    # Glob all the ORIENT-specific 1D FITS files.
-    orient_1D = glob.glob('{}-[0-9]*1D.fits'.format(field.upper()))
+    if overlapping_field == None:
+        # Normal case.
+        # Glob all the ORIENT-specific 1D FITS files.
+        orient_1D = glob.glob('{}-[0-9]*1D.fits'.format(field.upper()))
+        # Glob all the ORIENT-specific 2D FITS and PNG files.
+        orient_2D = glob.glob('{}-[0-9]*2D.fits'.format(field.upper())) + \
+            glob.glob('{}-[0-9]*2D.png'.format(field.upper()))
 
-    # Glob all the ORIENT-specific 2D FITS and PNG files.
-    orient_2D = glob.glob('{}-[0-9]*2D.fits'.format(field.upper())) + \
-        glob.glob('{}-[0-9]*2D.png'.format(field.upper()))
+    else:
+        # 3DHST field
+        # Glob all the ORIENT-specific 1D FITS files.
+        orient_1D = glob.glob('{}-[0-9]*1D.fits'.format(overlapping_field.upper()))
+        # Glob all the ORIENT-specific 2D FITS and PNG files.
+        orient_2D = glob.glob('{}-[0-9]*2D.fits'.format(overlapping_field.upper())) + \
+            glob.glob('{}-[0-9]*2D.png'.format(field.upper()))
+
+    # If field is GN2, need make a special case so can catch visit A4.
+    if field.upper() == 'GN2':
+        orient_1D += glob.glob('{}-A4*1D.fits'.format(field.upper()))
+        orient_2D += glob.glob('{}-A4*2D.fits'.format(field.upper())) + \
+            glob.glob('{}-A4*2D.png'.format(field.upper()))
+
 
     # These files need be sorted and moved by visit, 'bottomdir', and extension.
     check_and_create_dirs(file_list=orient_1D, topdir=topdir, 
@@ -829,6 +851,8 @@ def check_and_create_dirs(file_list, topdir, bottomname, orient=True,
     for f in file_list:    
         visit = f.split('-')[1]
         program = f.split('-')[0]
+
+        print("program: ", program)
 
         if orient:
             # Create directory for that visit, if it doesn't exist.
@@ -922,8 +946,20 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                     if 3 in do_steps:
                         tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                         extract_clear(field=overlapping_field, tab=tab, mag_lim=mag_lim)
+                if 4 in do_steps:
+                    tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
+                    stack_clear(field=field, tab=tab, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
+                if 5 in do_steps:
+                    print("Starting z and em line fitting!")
+                    tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
+                    fit_redshifts_and_emissionlines(field=field, tab=tab)
+
+                    for overlapping_field in overlapping_fields_all:                    
+                        sort_outputs(field=field, overlapping_field=overlapping_field, 
+                            catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
 
             else:
+                # GS fields
                 if 1 in do_steps:
                     interlace_clear(field=field, ref_filter=ref_filter)
                 if 2 in do_steps:
@@ -931,31 +967,36 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
 
                 if 3 in do_steps:
                     tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
-                    extract_clear(field=field, tab=tab, mag_lim=mag_lim)
-                
-            if 4 in do_steps:
-                tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
-                stack_clear(field=field, tab=tab, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
-            if 5 in do_steps:
-                tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
-                fit_redshifts_and_emissionlines(field=field, tab=tab)
-                sort_outputs(field=field, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
-            elif 4 in do_steps and 5 not in do_steps:
+                    extract_clear(field=field, tab=tab, mag_lim=mag_lim)              
+                if 4 in do_steps:
+                    tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
+                    stack_clear(field=field, tab=tab, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
+                # add if-else 'GN' in field?
+                # Then add to parameters 'overlapping_field' option so can still sort by CLEAR field
+                # alsooo need add case for the A2 visit in GN
+                if 5 in do_steps:
+                    tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
+                    fit_redshifts_and_emissionlines(field=field, tab=tab)
+                    sort_outputs(field=field, overlapping_field=None, catname=catname, 
+                        ref_filter=ref_filter, mag_lim=mag_lim)
+
+            if 4 in do_steps and 5 not in do_steps:
                 print("")
-                sort_outputs(field=field, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)           
+                sort_outputs(field=field, overlapping_field=None, catname=catname, 
+                    ref_filter=ref_filter, mag_lim=mag_lim)           
         
 
 
 if __name__=='__main__':
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
-    fields = ['GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] #, 'GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
+    fields = ['GS3'] #['GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] #, 'GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
     ref_filter = 'F105W' #'F125W'
     mag_lim = 25 #None
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
     #do_steps = [1,2]
     #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
-    do_steps = [3,4,5] 
+    do_steps = [5] 
     for cat in [full_cats]: #all_cats:
         clear_pipeline_main(
             fields=fields, 
