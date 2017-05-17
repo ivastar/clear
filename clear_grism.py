@@ -81,6 +81,9 @@ full_cats = {'N' : ['GoodsN_plus.cat'],
 all_cats = [quiescent_cats, emitters_cats, zn_cats, full_cats] #, ivas_cat]
 
 ## Associate CLEAR Goods-N pointings with overlapping 3DHST pointings.
+# To be extra confusing, each 3D-HST 'field' is also a single 'pointing'.
+# But the dictionary below maps them to a single CLEAR field, so that they
+# can be stacked appropriately.
 overlapping_fields = {'GN1':['GDN20'],
                       'GN2':['GDN8', 'GDN12', 'GDN21', 'GDN25'],
                       'GN3':['GDN18', 'GDN19', 'GDN22', 'GDN23'],
@@ -102,6 +105,7 @@ def interlace_clear(field, ref_filter):
         Filter of the reference image.
 
     ** Step 1 of Interlace steps. **
+    ** Takes a field and loops over all pointings (visits) **
 
     We interlace instead of drizzle.
     Drizzling with just a few images produces correlated noise and loss of 
@@ -359,6 +363,12 @@ def extract_clear(field, tab, mag_lim=None):
         The magnitude down from which to extract.  If 'None' ignores
         magnitude filter.
 
+    Produces
+    --------
+    - <field>-<visit>-<orient>-G102_<id>.1D.fits (ie, GN3-56-175-G102_28015.1D.fits)
+    - <field>-<visit>-<orient>-G102_<id>.2D.fits 
+    - <field>-<visit>-<orient>-G102_<id>.2D.png
+
     Checks
     ------
         *2D.png should show some extracted spectra (most may be empty)
@@ -452,6 +462,11 @@ def stack_clear(field, tab, catname, ref_filter, mag_lim=None):
         The magnitude down from which to extract.  If 'None' ignores
         magnitude filter.
 
+    Produces
+    --------
+    - <field>-G102_<id>.1D.fits (ie, GN3-G102_28121.1D.fits)
+    - <field>-G102_<id>.2D.fits
+    - <field>-G102_<id>.2D.png
 
     Checks
     ------
@@ -558,9 +573,9 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
     else:
         contam_mag_lim = mag_lim
 
-    # Get all visit assocations for the pointing.
-    asns = glob.glob(field+'*G102_asn.fits')
-    print("Associations for field {} : {}".format(field, asns))
+    ## Get all visit assocations for the pointing.
+    #asns = glob.glob(field+'*G102_asn.fits')
+    #print("Associations for field {} : {}".format(field, asns))
 
     # Find the unique root for the pointing, for its stacked 2D.fits.
     twods = glob.glob('{}-G102_*.2D.fits'.format(field))
@@ -574,9 +589,45 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
 
     # Master list of ids. Keep track of those already fitted from the stacked
     # 2D FITS files, so not repeating a source over and over.
-    used_ids = []
+    #used_ids = []
 
-    # should we be looping over associations?? 
+    for id in stacked_ids:
+        obj_root='{}_{:05d}'.format(pointing_root, id)
+        print("obj_root: ", obj_root)
+        try:
+            # Redshift fit
+            gris = interlace_test.SimultaneousFit(
+                obj_root,
+                lowz_thresh=0.01, 
+                FIGURE_FORMAT='png')     
+        except (ValueError) as err: #, IndexError) as err:
+            #print("ValueError in SimultansousFit of {}".format(obj_root))
+            print(err)
+            print("Error in {}; skipping...".format(obj_root))
+            continue
+
+        #if gris.status is False:
+        #    continue
+
+        if not os.path.exists(obj_root + '.new_zfit.pz.fits'):
+            print("Fitting z...")
+            try:
+                gris.new_fit_constrained()
+                gris.new_save_results()
+                gris.make_2d_model()
+            except:
+                continue
+        if not os.path.exists(obj_root+'.linefit.fits'):
+            print("Fitting em lines...")
+            #try:
+                # Emission line fit
+            gris.new_fit_free_emlines(ztry=None, NSTEP=600)
+            #except:
+            #    continue
+
+
+    """
+    # should we be looping over associations?? Shouldn't care about the pointing now. 
     for asn in asns:
         used_ids = []
         asn_root = asn.split('-G102')[0]
@@ -623,7 +674,7 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
                     gris.new_fit_free_emlines(ztry=None, NSTEP=600)
                     #except:
                     #    continue
-
+        """
 
     print("*** fit redshifts and emission lines step complete ***")
 
@@ -937,6 +988,9 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                 overlapping_fields_all = overlapping_fields[field]
                 overlapping_fields_all.append(field)
                 for overlapping_field in overlapping_fields_all:
+                    # Remember that a 3D-HST 'field' really is just a 'pointing' of
+                    # the CLEAR field! Buuuut steps 1, 2, & 3 treat them as full-fledged
+                    # fields. 
                     print("***Beginning overlapping 13420 field {}***".format(overlapping_field))
                     print("")
                     if 1 in do_steps:
