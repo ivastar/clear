@@ -4,12 +4,33 @@ extractions.
 Add catalogs or overlapping fields to the global lists and dictionaries 
 up top.  
 
+Note what I call a 'field' here means a 'pointing' of either GOODS-N or
+GOODS-S, for example, GS1 or ERSPRIME.
+
 Use:
     
     Be in the outputs directory.  In the Main, change the field, ref_image,
     and step numbers.  Then,
 
-    >>> python clear_pipeline.py
+    >>> python clear_pipeline.py --fields (required) --steps (optional) --mlim (optional) --ref (optional)
+
+    --fields : List the fields over which to run pipeline. Default is all. For example,
+
+    --steps : List the processing steps to run. Default is all five. Steps are NOT independent.
+              If choose to run a step alone, be sure products exist from the previous step.
+              1 - Interlace visits
+              2 - Create contamination models
+              3 - Extract traces
+              4 - Stack traces
+              5 - Fit redshifts and emission lines of traces
+    
+    --mlim : The magnitude limit for extraction. Default is 25.
+
+    --ref : The reference image filter. Choose either F105W or F125W. Default is F105W.
+
+Example:
+
+    >>> python clear_pipeline.py --fields GS1 ERSPRIME --steps 1 2 
 
 Authors:
     
@@ -17,8 +38,7 @@ Authors:
 
 Future improvements:
 
-    1. add arg parsing?
-    2. add option to extract either based on magnitude or on catalog
+    1. add command-line option to extract either based on magnitude OR on catalog
 
 
 Here are the 14227 visits contained in each field. 
@@ -41,10 +61,11 @@ GN6 is a myth
 
 from __future__ import print_function
 
-import os
+import argparse
+import astropy.io.fits as pyfits
 import glob
 import numpy as np
-import astropy.io.fits as pyfits
+import os
 import shutil
 import time
 
@@ -566,30 +587,20 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
     """
     # add way to copy all 1D and 2D files from latest extraction for field? 
 
-
     # Keep magnitude limit for contam models from being too low. 
     if mag_lim == None or mag_lim < 24:
         contam_mag_lim = 24
     else:
         contam_mag_lim = mag_lim
 
-    ## Get all visit assocations for the pointing.
-    #asns = glob.glob(field+'*G102_asn.fits')
-    #print("Associations for field {} : {}".format(field, asns))
-
     # Find the unique root for the pointing, for its stacked 2D.fits.
     twods = glob.glob('{}-G102_*.2D.fits'.format(field))
-    print(twods)
     pointing_root = np.unique(np.array([twod.split('_')[0] for twod in twods]))[0]
 
     # Get IDs of all the sources stacked.
     stacked_ids = np.array([twod.split('_')[1].split('.2D.fits')[0] for twod in twods], dtype=int)
     print("stacked_ids: ")
     print(stacked_ids)
-
-    # Master list of ids. Keep track of those already fitted from the stacked
-    # 2D FITS files, so not repeating a source over and over.
-    #used_ids = []
 
     for id in stacked_ids:
         obj_root='{}_{:05d}'.format(pointing_root, id)
@@ -600,8 +611,7 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
                 obj_root,
                 lowz_thresh=0.01, 
                 FIGURE_FORMAT='png')     
-        except (ValueError) as err: #, IndexError) as err:
-            #print("ValueError in SimultansousFit of {}".format(obj_root))
+        except (ValueError) as err: 
             print(err)
             print("Error in {}; skipping...".format(obj_root))
             continue
@@ -624,57 +634,6 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
             gris.new_fit_free_emlines(ztry=None, NSTEP=600)
             #except:
             #    continue
-
-
-    """
-    # should we be looping over associations?? Shouldn't care about the pointing now. 
-    for asn in asns:
-        used_ids = []
-        asn_root = asn.split('-G102')[0]
-        model, ids = return_model_and_ids(
-            root=asn_root, contam_mag_lim=contam_mag_lim, tab=tab)
-
-        for id in ids:
-            if (id in stacked_ids) and (id not in used_ids): 
-                used_ids.append(id)
-
-                obj_root='{}_{:05d}'.format(pointing_root, id)
-                print("obj_root: ", obj_root)
-                status = model.twod_spectrum(id, miny=40)
-                if not status:
-                    continue
-                try:
-                    # Redshift fit
-                    gris = interlace_test.SimultaneousFit(
-                        obj_root,
-                        lowz_thresh=0.01, 
-                        FIGURE_FORMAT='png') 
-                except (ValueError) as err: #, IndexError) as err:
-                    #print("ValueError in SimultansousFit of {}".format(obj_root))
-                    print(err)
-                    print("Error in {}; skipping...".format(obj_root))
-                    continue
-
-                
-                #if gris.status is False:
-                #    continue
-
-                if not os.path.exists(obj_root + '.new_zfit.pz.fits'):
-                    print("Fitting z...")
-                    try:
-                        gris.new_fit_constrained()
-                        gris.new_save_results()
-                        gris.make_2d_model()
-                    except:
-                        continue
-                if not os.path.exists(obj_root+'.linefit.fits'):
-                    print("Fitting em lines...")
-                    #try:
-                        # Emission line fit
-                    gris.new_fit_free_emlines(ztry=None, NSTEP=600)
-                    #except:
-                    #    continue
-        """
 
     print("*** fit redshifts and emission lines step complete ***")
 
@@ -988,7 +947,7 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                 overlapping_fields_all = overlapping_fields[field]
                 overlapping_fields_all.append(field)
                 for overlapping_field in overlapping_fields_all:
-                    # Remember that a 3D-HST 'field' really is just a 'pointing' of
+                    # Remember that a Barro 'field' really is just a visit of
                     # the CLEAR field! Buuuut steps 1, 2, & 3 treat them as full-fledged
                     # fields. 
                     print("***Beginning overlapping 13420 field {}***".format(overlapping_field))
@@ -1038,19 +997,72 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                 print("")
                 sort_outputs(field=field, overlapping_field=None, catname=catname, 
                     ref_filter=ref_filter, mag_lim=mag_lim)           
+ 
+
+#-------------------------------------------------------------------------------  
+
+def parse_args():
+    """Parses command line arguments.
         
+    Returns
+    -------
+    args : object
+        Containing the image and destination arguments.
+            
+    """
+
+    fields_help = "List the fields over which to run pipeline. Default is all."
+    ref_filter_help = "The reference image filter. Choose either F105W or F125W. Default is F105W."
+    mag_lim_help = "The magnitude limit for extraction. Default is 25."
+    do_steps_help = "List the processing steps to run. Default is all five. Steps are NOT independent." 
+    do_steps_help += "If choose to run a step alone, be sure products exist from the previous step."
+    do_steps_help += "1 - Interlace visits"
+    do_steps_help += "2 - Create contamination models"
+    do_steps_help += "3 - Extract traces"
+    do_steps_help += "4 - Stack traces"
+    do_steps_help += "5 - Fit redshifts and emission lines of traces"
+        
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fields', dest = 'fields',
+                        action = 'store', type = str, required = True,
+                        help = fields_help, nargs='+', default=['GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'])       
+    parser.add_argument('--steps', dest = 'do_steps',
+                        action = 'store', type = int, required = False,
+                        help = do_steps_help,  nargs='+', default=[1,2,3,4,5])    
+    parser.add_argument('--mlim', dest = 'mag_lim',
+                        action = 'store', type = int, required = False,
+                        help = mag_lim_help,  default=25)
+    parser.add_argument('--ref', dest = 'ref_filter',
+                        action = 'store', type = str, required = False,
+                        help = ref_filter_help,  default='F105W')
+
+    args = parser.parse_args()
+     
+    return args
+
+#-------------------------------------------------------------------------------  
 
 
 if __name__=='__main__':
-    # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
-    fields = ['GS3'] #['GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] #, 'GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
+    """
+    fields = ['GN2'] #'GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
     ref_filter = 'F105W' #'F125W'
     mag_lim = 25 #None
     # Steps 3 and 4 should always be done together (the output directory will be messed up
     # if otherwise ran another extraction catalog through 3 first.)
-    #do_steps = [1,2]
-    #clear_pipeline_main(fields=fields, do_steps=do_steps, cats=all_cats[0], ref_filter=ref_filter)
     do_steps = [5] 
+    """
+    args = parse_args()
+    fields = args.fields
+    do_steps = args.do_steps
+    mag_lim = args.mag_lim
+    ref_filter = args.ref_filter
+
+    print("CLEAR pipeline running on fields {},\nover steps {},\nat mag-limit {},\nfor reference filter {}.\n"\
+        .format(fields, do_steps, mag_lim, ref_filter))
+
+    # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
+
     for cat in [full_cats]: #all_cats:
         clear_pipeline_main(
             fields=fields, 
