@@ -764,7 +764,7 @@ def sort_outputs(field, overlapping_field, catname, ref_filter, mag_lim=None):
                 FITS
                 PNG
                 PZ_FITS
-                2D_FITS
+                2D_PNG
                 TILT_DAT
                 TILT_PNG
 
@@ -863,7 +863,7 @@ def sort_outputs(field, overlapping_field, catname, ref_filter, mag_lim=None):
     check_and_create_dirs(file_list=comb_zfit_pz, topdir=topdir, 
         bottomname='ZFIT', orient=False, overwrite_ext='PZ_FITS')
     check_and_create_dirs(file_list=comb_zfit_2D, topdir=topdir, 
-        bottomname='ZFIT', orient=False, overwrite_ext='2D_FITS')
+        bottomname='ZFIT', orient=False, overwrite_ext='2D_PNG')
     check_and_create_dirs(file_list=comb_zfit_tilt_dat, topdir=topdir, 
         bottomname='ZFIT', orient=False, overwrite_ext='TILT_DAT')
     check_and_create_dirs(file_list=comb_zfit_tilt_png, topdir=topdir, 
@@ -907,9 +907,9 @@ def check_and_create_dirs(file_list, topdir, bottomname, orient=True,
 
         if orient:
             # Create directory for that visit, if it doesn't exist.
-            # Will need special case for images from 3DHST.
+            # Will need special case for images from G. Barro's program 13420.
             if 'GDN' in program:
-                visitdir = os.path.join(topdir, '3dhst-{}'.format(visit))
+                visitdir = os.path.join(topdir, 'barro-{}'.format(visit))
             else:
                 visitdir = os.path.join(topdir, 'clear-{}'.format(visit))
         else:
