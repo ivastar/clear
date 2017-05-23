@@ -9,7 +9,7 @@ Use:
     Be in the outputs directory.  In the Main, change the field, ref_image,
     and step numbers.  Then,
 
-    >>> python clear_grism.py
+    >>> python clear_pipeline.py
 
 Authors:
     
