@@ -101,9 +101,9 @@ full_cats = {'N' : ['GoodsN_plus.cat'],
 
 all_cats = [quiescent_cats, emitters_cats, zn_cats, full_cats] #, ivas_cat]
 
-## Associate CLEAR Goods-N pointings with overlapping 3DHST pointings.
-# To be extra confusing, each 3D-HST 'field' is also a single 'pointing'.
-# But the dictionary below maps them to a single CLEAR field, so that they
+## Associate CLEAR Goods-N pointings with overlapping Barro pointings.
+# To be extra confusing, each Barro 'visit' is also a single 'pointing'.
+# But the dictionary below maps them to a single CLEAR pointing, so that they
 # can be stacked appropriately.
 overlapping_fields = {'GN1':['GDN20'],
                       'GN2':['GDN8', 'GDN12', 'GDN21', 'GDN25'],
@@ -387,6 +387,7 @@ def extract_clear(field, tab, mag_lim=None):
     Produces
     --------
     - <field>-<visit>-<orient>-G102_<id>.1D.fits (ie, GN3-56-175-G102_28015.1D.fits)
+    - <field>-<visit>-<orient>-G102_<id>.1D.png
     - <field>-<visit>-<orient>-G102_<id>.2D.fits 
     - <field>-<visit>-<orient>-G102_<id>.2D.png
 
@@ -415,10 +416,12 @@ def extract_clear(field, tab, mag_lim=None):
         #print(model.cat.id)
 
         for id, mag in zip(model.cat.id, model.cat.mag):
+            # If extracting by magnitude limit.
             if mag_lim != None:
                 if (id in ids and mag <= mag_lim):   
                     print("id, mag: ", id, mag)
                     try:
+                        # In spite of name, also creates 1D FITS.
                         model.twod_spectrum(
                             id=id, 
                             grow=1, 
@@ -437,11 +440,12 @@ def extract_clear(field, tab, mag_lim=None):
                     except:
                         continue
 
-
+            # If extracting by catalog.
             else:
                 if (id in ids):
                     print("id: ", id)
                     try:
+                        # In spite of name, also creates 1D FITS.
                         model.twod_spectrum(
                             id=id, 
                             grow=1, 
@@ -517,6 +521,7 @@ def stack_clear(field, tab, catname, ref_filter, mag_lim=None):
             root=root, contam_mag_lim=contam_mag_lim, tab=tab)
 
         for id, mag in zip(model.cat.id, model.cat.mag):
+            # If extracting by magnitude limit.
             if mag_lim != None:
                 if (id in ids and mag <= mag_lim):   
                     print("id, mag: ", id, mag)
@@ -537,6 +542,7 @@ def stack_clear(field, tab, catname, ref_filter, mag_lim=None):
                     except:
                         continue
 
+            # If extracting by catalog.
             else:
                 if (id in ids):
                     print("id: ", id)
@@ -582,7 +588,7 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
 
     Notes
     -----
-    Based on lines 182-207 of unicorn/aws.py
+        Based on lines 182-207 of unicorn/aws.py
 
     """
     # add way to copy all 1D and 2D files from latest extraction for field? 
@@ -703,6 +709,7 @@ def sort_outputs(field, overlapping_field, catname, ref_filter, mag_lim=None):
         ORIENT2
             1D
                 FITS
+                PNG
             2D
                 FITS
                 PNG
@@ -765,22 +772,25 @@ def sort_outputs(field, overlapping_field, catname, ref_filter, mag_lim=None):
     if overlapping_field == None:
         # Normal case.
         # Glob all the ORIENT-specific 1D FITS files.
-        orient_1D = glob.glob('{}-[0-9]*1D.fits'.format(field.upper()))
+        orient_1D = glob.glob('{}-[0-9]*1D.fits'.format(field.upper())) + \
+            glob.glob('{}-[0-9]*1D.png'.format(field.upper()))
         # Glob all the ORIENT-specific 2D FITS and PNG files.
         orient_2D = glob.glob('{}-[0-9]*2D.fits'.format(field.upper())) + \
             glob.glob('{}-[0-9]*2D.png'.format(field.upper()))
 
     else:
-        # 3DHST field
+        # Barro field
         # Glob all the ORIENT-specific 1D FITS files.
-        orient_1D = glob.glob('{}-[0-9]*1D.fits'.format(overlapping_field.upper()))
+        orient_1D = glob.glob('{}-[0-9]*1D.fits'.format(overlapping_field.upper())) + \
+            glob.glob('{}-[0-9]*1D.png'.format(overlapping_field.upper()))
         # Glob all the ORIENT-specific 2D FITS and PNG files.
         orient_2D = glob.glob('{}-[0-9]*2D.fits'.format(overlapping_field.upper())) + \
-            glob.glob('{}-[0-9]*2D.png'.format(field.upper()))
+            glob.glob('{}-[0-9]*2D.png'.format(overlapping_field.upper()))
 
     # If field is GN2, need make a special case so can catch visit A4.
     if field.upper() == 'GN2':
-        orient_1D += glob.glob('{}-A4*1D.fits'.format(field.upper()))
+        orient_1D += glob.glob('{}-A4*1D.fits'.format(field.upper())) + \
+            glob.glob('{}-A4*1D.png'.format(field.upper()))
         orient_2D += glob.glob('{}-A4*2D.fits'.format(field.upper())) + \
             glob.glob('{}-A4*2D.png'.format(field.upper()))
 
@@ -967,7 +977,12 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                     tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                     fit_redshifts_and_emissionlines(field=field, tab=tab)
 
-                    for overlapping_field in overlapping_fields_all:                    
+                    for overlapping_field in overlapping_fields_all:  
+                        ## remember to remove this after done making 1D.PNG files!
+                        onedfiles = glob.glob('{}*1D.fits'.format(overlapping_field.upper()))
+                        for onedfile in onedfiles:
+                            unicorn.reduce.Interlace1D(file=onedfile, PNG=True) 
+                        ##
                         sort_outputs(field=field, overlapping_field=overlapping_field, 
                             catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
 
@@ -1011,16 +1026,16 @@ def parse_args():
             
     """
 
-    fields_help = "List the fields over which to run pipeline. Default is all."
-    ref_filter_help = "The reference image filter. Choose either F105W or F125W. Default is F105W."
-    mag_lim_help = "The magnitude limit for extraction. Default is 25."
-    do_steps_help = "List the processing steps to run. Default is all five. Steps are NOT independent." 
-    do_steps_help += "If choose to run a step alone, be sure products exist from the previous step."
-    do_steps_help += "1 - Interlace visits"
-    do_steps_help += "2 - Create contamination models"
-    do_steps_help += "3 - Extract traces"
-    do_steps_help += "4 - Stack traces"
-    do_steps_help += "5 - Fit redshifts and emission lines of traces"
+    fields_help = "List the fields over which to run pipeline. Default is all. "
+    ref_filter_help = "The reference image filter. Choose either F105W or F125W. Default is F105W. "
+    mag_lim_help = "The magnitude limit for extraction. Default is 25. "
+    do_steps_help = "List the processing steps to run. Default is all five. Steps are NOT independent. " 
+    do_steps_help += "If choose to run a step alone, be sure products exist from the previous step. "
+    do_steps_help += "1 - Interlace visits. "
+    do_steps_help += "2 - Create contamination model. "
+    do_steps_help += "3 - Extract traces. "
+    do_steps_help += "4 - Stack traces. "
+    do_steps_help += "5 - Fit redshifts and emission lines of traces. "
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--fields', dest = 'fields',
@@ -1062,6 +1077,7 @@ if __name__=='__main__':
         .format(fields, do_steps, mag_lim, ref_filter))
 
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
+    # mag_lim = None
 
     for cat in [full_cats]: #all_cats:
         clear_pipeline_main(
