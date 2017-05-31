@@ -38,7 +38,8 @@ Authors:
 
 Future improvements:
 
-    1. add command-line option to extract either based on magnitude OR on catalog
+    1. Add command-line option to extract either based on magnitude OR on catalog
+    2. Logging would awesome, but probably not worth effort at this point.
 
 
 Here are the 14227 visits contained in each field. 
@@ -803,7 +804,8 @@ def sort_outputs(field, overlapping_field, catname, ref_filter, mag_lim=None):
 
     # This finishes sorting the ORIENTS.
     # Next on to the COMBINED, which are more numerous and varied. 
-    comb_1D = glob.glob('{}-G102*1D.fits'.format(field.upper()))
+    comb_1D = glob.glob('{}-G102*1D.fits'.format(field.upper())) + \
+        glob.glob('{}-G102*1D.png'.format(field.upper()))
     comb_2D = glob.glob('{}-G102*2D.fits'.format(field.upper())) + \
         glob.glob('{}-G102*stack.png'.format(field.upper()))
     comb_linefit = glob.glob('{}-G102*linefit.dat'.format(field.upper())) + \
@@ -979,9 +981,9 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
 
                     for overlapping_field in overlapping_fields_all:  
                         ## remember to remove this after done making 1D.PNG files!
-                        onedfiles = glob.glob('{}*1D.fits'.format(overlapping_field.upper()))
-                        for onedfile in onedfiles:
-                            unicorn.reduce.Interlace1D(file=onedfile, PNG=True) 
+                        #onedfiles = glob.glob('{}*1D.fits'.format(overlapping_field.upper()))
+                        #for onedfile in onedfiles:
+                        #    unicorn.reduce.Interlace1D(file=onedfile, PNG=True) 
                         ##
                         sort_outputs(field=field, overlapping_field=overlapping_field, 
                             catname=catname, ref_filter=ref_filter, mag_lim=mag_lim)
@@ -999,9 +1001,6 @@ def clear_pipeline_main(fields, do_steps, cats, mag_lim, ref_filter):
                 if 4 in do_steps:
                     tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                     stack_clear(field=field, tab=tab, catname=catname, ref_filter=ref_filter, mag_lim=mag_lim) 
-                # add if-else 'GN' in field?
-                # Then add to parameters 'overlapping_field' option so can still sort by CLEAR field
-                # alsooo need add case for the A2 visit in GN
                 if 5 in do_steps:
                     tab = Table.read(os.path.join(path_to_REF, cat), format='ascii')
                     fit_redshifts_and_emissionlines(field=field, tab=tab)
@@ -1059,14 +1058,7 @@ def parse_args():
 
 
 if __name__=='__main__':
-    """
-    fields = ['GN2'] #'GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'] 
-    ref_filter = 'F105W' #'F125W'
-    mag_lim = 25 #None
-    # Steps 3 and 4 should always be done together (the output directory will be messed up
-    # if otherwise ran another extraction catalog through 3 first.)
-    do_steps = [5] 
-    """
+
     args = parse_args()
     fields = args.fields
     do_steps = args.do_steps
@@ -1076,6 +1068,7 @@ if __name__=='__main__':
     print("CLEAR pipeline running on fields {},\nover steps {},\nat mag-limit {},\nfor reference filter {}.\n"\
         .format(fields, do_steps, mag_lim, ref_filter))
 
+    ## switching between catalog and mag-limit extraction should be made a command-line option
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
     # mag_lim = None
 
