@@ -95,12 +95,18 @@ zn_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6
              'S' : ['added_sources_S_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]],
              'name' : ['z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
 
+sijie_cat = {'S':['NoExtracationGoodsList.txt'], 'name':['sijiegoodss']}
+
 # Full catalogs, to be used if extracting based on magnitude. 
 full_cats = {'N' : ['GoodsN_plus.cat'], 
                  'S' : ['GoodsS_plus.cat'], 
-                 'name' : ['maglim']}
+                 'name' : ['full']}
 
 all_cats = [quiescent_cats, emitters_cats, zn_cats, full_cats] #, ivas_cat]
+
+all_cats = {'emitters':emitters_cats, 'full':full_cats, 
+            'quiescent':quiescent_cats, 
+            'sijie':sijie_cats, 'zn':zn_cats, }
 
 ## Associate CLEAR Goods-N pointings with overlapping Barro pointings.
 # To be extra confusing, each Barro 'visit' is also a single 'pointing'.
@@ -602,6 +608,7 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
 
     # Find the unique root for the pointing, for its stacked 2D.fits.
     twods = glob.glob('{}-G102_*.2D.fits'.format(field))
+    print("twods: {}".format(twods))
     pointing_root = np.unique(np.array([twod.split('_')[0] for twod in twods]))[0]
 
     # Get IDs of all the sources stacked.
@@ -756,12 +763,8 @@ def sort_outputs(field, overlapping_field, catname, ref_filter, mag_lim=None):
     path_to_Extractions = paths['path_to_Extractions']
 
     # Create the top-level name for the extractions.
-    # Format extraction group name. If extractions done by magnitude limit,
-    # name after the limit. If done by catalog, name by catalog. 
-    if mag_lim == None:
-        basename = catname
-    else:
-        basename = 'maglim{}'.format(str(mag_lim)) 
+    # Name by catalog and magnitude limit. 
+    basename = 'cat{}_maglim{}'.format(catname.upper(), str(mag_lim)) 
 
     topdir = os.path.join(path_to_Extractions, field, '{}_ref{}_{}'.format(basename, ref_filter,
         time.strftime('%Y-%m-%d')))
@@ -1027,7 +1030,7 @@ def parse_args():
 
     fields_help = "List the fields over which to run pipeline. Default is all. "
     ref_filter_help = "The reference image filter. Choose either F105W or F125W. Default is F105W. "
-    mag_lim_help = "The magnitude limit for extraction. Default is 25. "
+    mag_lim_help = "The magnitude limit for extraction. Default is 25. Set to None to turn off."
     do_steps_help = "List the processing steps to run. Default is all five. Steps are NOT independent. " 
     do_steps_help += "If choose to run a step alone, be sure products exist from the previous step. "
     do_steps_help += "1 - Interlace visits. "
@@ -1035,20 +1038,26 @@ def parse_args():
     do_steps_help += "3 - Extract traces. "
     do_steps_help += "4 - Stack traces. "
     do_steps_help += "5 - Fit redshifts and emission lines of traces. "
+    cats_help = "List of catalogs over which to run pipeline. Use in combination with mag_lim. "
+    cats_help += "Default is 'full', which is generally used when extracting by mag_lim. "
+    cats_help += "Catalog options are 'full', and its subsets, 'emitters', 'quiescent', 'sijie', and 'zn'. "
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--fields', dest = 'fields',
-                        action = 'store', type = str, required = True,
+                        action = 'store', type = str, required = False,
                         help = fields_help, nargs='+', default=['GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'])       
     parser.add_argument('--steps', dest = 'do_steps',
                         action = 'store', type = int, required = False,
                         help = do_steps_help,  nargs='+', default=[1,2,3,4,5])    
     parser.add_argument('--mlim', dest = 'mag_lim',
-                        action = 'store', type = int, required = False,
-                        help = mag_lim_help,  default=25)
+                        action = 'store', required = False,
+                        help = mag_lim_help, default=25)
     parser.add_argument('--ref', dest = 'ref_filter',
                         action = 'store', type = str, required = False,
                         help = ref_filter_help,  default='F105W')
+    parser.add_argument('--cats', dest = 'cats',
+                        action = 'store', type = str, required = False,
+                        help = cats_help, nargs = '+', default='full')
 
     args = parser.parse_args()
      
@@ -1064,15 +1073,21 @@ if __name__=='__main__':
     do_steps = args.do_steps
     mag_lim = args.mag_lim
     ref_filter = args.ref_filter
+    cat_names = args.cats
 
-    print("CLEAR pipeline running on fields {},\nover steps {},\nat mag-limit {},\nfor reference filter {}.\n"\
-        .format(fields, do_steps, mag_lim, ref_filter))
+    print("CLEAR pipeline running on fields {},\nover steps {},\nat mag-limit {},\nfor reference filter {}\nover catalogs {}.\n"\
+        .format(fields, do_steps, mag_lim, ref_filter, cats))
 
     ## switching between catalog and mag-limit extraction should be made a command-line option
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
     # mag_lim = None
 
-    for cat in [full_cats]: #all_cats:
+    # match to the catalog dictionary
+    cats_list = []
+    for cat in cat_names:
+        cats_list.append(all_cats[cat])
+
+    for cat in cats_list: #[full_cats]:
         clear_pipeline_main(
             fields=fields, 
             do_steps=do_steps, 
