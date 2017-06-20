@@ -95,7 +95,7 @@ zn_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6
              'S' : ['added_sources_S_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]],
              'name' : ['z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
 
-sijie_cat = {'S':['NoExtracationGoodsList.txt'], 'name':['sijiegoodss']}
+sijie_cats = {'S':['NoExtracationGoodsList.txt'], 'name':['sijiegoodss']}
 
 # Full catalogs, to be used if extracting based on magnitude. 
 full_cats = {'N' : ['GoodsN_plus.cat'], 
@@ -1076,7 +1076,7 @@ if __name__=='__main__':
     cat_names = args.cats
 
     print("CLEAR pipeline running on fields {},\nover steps {},\nat mag-limit {},\nfor reference filter {}\nover catalogs {}.\n"\
-        .format(fields, do_steps, mag_lim, ref_filter, cats))
+        .format(fields, do_steps, mag_lim, ref_filter, cat_names))
 
     ## switching between catalog and mag-limit extraction should be made a command-line option
     # all_cats = [quiescent_cats, emitters_cats, ivas_cat, zn_cats]
@@ -1086,6 +1086,7 @@ if __name__=='__main__':
     cats_list = []
     for cat in cat_names:
         cats_list.append(all_cats[cat])
+    print(cats_list)
 
     for cat in cats_list: #[full_cats]:
         clear_pipeline_main(
