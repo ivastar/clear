@@ -86,8 +86,11 @@ from set_paths import paths
 quiescent_cats = {'N' : ['UVJ_quiescent_goodsn.dat'], 
                   'S' : ['UVJ_quiescent_goodss.dat'], 
                   'name' : ['quiescent']}
-emitters_cats = {'N' : ['Steves_source_goodsn_w_ids.dat'], 
-                 'S' : ['Steves_source_goodss_w_ids.dat'], 
+#emitters_cats = {'N' : ['Steves_source_goodsn_w_ids.dat'], 
+#                 'S' : ['Steves_source_goodss_w_ids.dat'], 
+#                 'name' : ['emitters']}
+emitters_cats = {'N' : ['GOODSN_plus_translation_all.dat'], 
+                 'S' : ['GOODSS_plus_translation_all.dat'], 
                  'name' : ['emitters']}
 ivas_cat = {'N' : ['Ivas_goodsn.dat'], 
             'name' : ['ivas']}
