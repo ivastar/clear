@@ -407,7 +407,7 @@ def extract_clear(field, tab, mag_lim=None):
 
     """  
 
-    grism = glob.glob(field+'*G102_asn.fits')
+    grism = glob.glob(field+'*G102_asn.fits')[:1]
 
     # Keep magnitude limit for contam models from being too low. 
     if mag_lim == None or mag_lim < 24:
@@ -427,7 +427,9 @@ def extract_clear(field, tab, mag_lim=None):
 
         for id, mag in zip(model.cat.id, model.cat.mag):
             # If extracting by magnitude limit.
+            print("magnitude limit is {}".format(mag_lim))
             if mag_lim != None:
+                print("extracting down to magnitude limit {}".format(mag_lim))
                 if (id in ids and mag <= mag_lim):   
                     print("id, mag: ", id, mag)
                     try:
@@ -451,9 +453,10 @@ def extract_clear(field, tab, mag_lim=None):
                         continue
 
             # If extracting by catalog.
-            else:
+            elif mag_lim == None:
+                print("magnitude limit is undefined. extracting all sources")
                 if (id in ids):
-                    print("id: ", id)
+                    print("id, mag: ", id, mag)
                     try:
                         # In spite of name, also creates 1D FITS.
                         model.twod_spectrum(
@@ -500,6 +503,7 @@ def stack_clear(field, tab, catname, ref_filter, mag_lim=None):
     Produces
     --------
     - <field>-G102_<id>.1D.fits (ie, GN3-G102_28121.1D.fits)
+    - <field>-G102_<id>.1D.png
     - <field>-G102_<id>.2D.fits
     - <field>-G102_<id>.2D.png
 
@@ -553,7 +557,7 @@ def stack_clear(field, tab, catname, ref_filter, mag_lim=None):
                         continue
 
             # If extracting by catalog.
-            else:
+            elif mag_lim == None:
                 if (id in ids):
                     print("id: ", id)
                     try:
@@ -1033,7 +1037,7 @@ def parse_args():
 
     fields_help = "List the fields over which to run pipeline. Default is all. "
     ref_filter_help = "The reference image filter. Choose either F105W or F125W. Default is F105W. "
-    mag_lim_help = "The magnitude limit for extraction. Default is 25. Set to None to turn off."
+    mag_lim_help = "The magnitude limit for extraction. Default is 25."
     do_steps_help = "List the processing steps to run. Default is all five. Steps are NOT independent. " 
     do_steps_help += "If choose to run a step alone, be sure products exist from the previous step. "
     do_steps_help += "1 - Interlace visits. "
@@ -1090,6 +1094,10 @@ if __name__=='__main__':
     for cat in cat_names:
         cats_list.append(all_cats[cat])
     print(cats_list)
+
+    # From argparse, None is a string.
+    if mag_lim == 'None':
+        mag_lim = None
 
     for cat in cats_list: #[full_cats]:
         clear_pipeline_main(
