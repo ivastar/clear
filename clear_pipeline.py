@@ -98,14 +98,13 @@ zn_cats = {'N' : ['added_sources_N_key_z{}.dat'.format(str(s)) for s in [3,4,5,6
              'S' : ['added_sources_S_key_z{}.dat'.format(str(s)) for s in [3,4,5,6,7,8]],
              'name' : ['z{}'.format(str(s)) for s in [3,4,5,6,7,8]]}
 
-sijie_cats = {'S':['NoExtracationGoodsList.txt'], 'name':['sijiegoodss']}
+sijie_cats = {'N':['noExtractionListNorth.txt'], 'name':['sijiegoodsn'],
+              'S':['NoExtracationGoodsList.txt'], 'name':['sijiegoodss']}
 
 # Full catalogs, to be used if extracting based on magnitude. 
 full_cats = {'N' : ['GoodsN_plus.cat'], 
                  'S' : ['GoodsS_plus.cat'], 
                  'name' : ['full']}
-
-all_cats = [quiescent_cats, emitters_cats, zn_cats, full_cats] #, ivas_cat]
 
 all_cats = {'emitters':emitters_cats, 'full':full_cats, 
             'quiescent':quiescent_cats, 
@@ -616,45 +615,50 @@ def fit_redshifts_and_emissionlines(field, tab, mag_lim=None):
     # Find the unique root for the pointing, for its stacked 2D.fits.
     twods = glob.glob('{}-G102_*.2D.fits'.format(field))
     print("twods: {}".format(twods))
-    pointing_root = np.unique(np.array([twod.split('_')[0] for twod in twods]))[0]
 
-    # Get IDs of all the sources stacked.
-    stacked_ids = np.array([twod.split('_')[1].split('.2D.fits')[0] for twod in twods], dtype=int)
-    print("stacked_ids: ")
-    print(stacked_ids)
+    if len(twods) >= 1:
+        pointing_root = np.unique(np.array([twod.split('_')[0] for twod in twods]))[0]
 
-    for id in stacked_ids:
-        obj_root='{}_{:05d}'.format(pointing_root, id)
-        print("obj_root: ", obj_root)
-        try:
-            # Redshift fit
-            gris = interlace_test.SimultaneousFit(
-                obj_root,
-                lowz_thresh=0.01, 
-                FIGURE_FORMAT='png')     
-        except (ValueError) as err: 
-            print(err)
-            print("Error in {}; skipping...".format(obj_root))
-            continue
+        # Get IDs of all the sources stacked.
+        stacked_ids = np.array([twod.split('_')[1].split('.2D.fits')[0] for twod in twods], dtype=int)
+        print("stacked_ids: ")
+        print(stacked_ids)
 
-        #if gris.status is False:
-        #    continue
-
-        if not os.path.exists(obj_root + '.new_zfit.pz.fits'):
-            print("Fitting z...")
+        for id in stacked_ids:
+            obj_root='{}_{:05d}'.format(pointing_root, id)
+            print("obj_root: ", obj_root)
             try:
-                gris.new_fit_constrained()
-                gris.new_save_results()
-                gris.make_2d_model()
-            except:
+                # Redshift fit
+                gris = interlace_test.SimultaneousFit(
+                    obj_root,
+                    lowz_thresh=0.01, 
+                    FIGURE_FORMAT='png')     
+            except (ValueError) as err: 
+                print(err)
+                print("Error in {}; skipping...".format(obj_root))
                 continue
-        if not os.path.exists(obj_root+'.linefit.fits'):
-            print("Fitting em lines...")
-            #try:
-                # Emission line fit
-            gris.new_fit_free_emlines(ztry=None, NSTEP=600)
-            #except:
+
+            #if gris.status is False:
             #    continue
+
+            if not os.path.exists(obj_root + '.new_zfit.pz.fits'):
+                print("Fitting z...")
+                try:
+                    gris.new_fit_constrained()
+                    gris.new_save_results()
+                    gris.make_2d_model()
+                except:
+                    continue
+            if not os.path.exists(obj_root+'.linefit.fits'):
+                print("Fitting em lines...")
+                #try:
+                    # Emission line fit
+                gris.new_fit_free_emlines(ztry=None, NSTEP=600)
+                #except:
+                #    continue
+    else:
+        print("Skipping {}-G102_*.2D.fits because none found".format(field))
+
 
     print("*** fit redshifts and emission lines step complete ***")
 
@@ -1096,7 +1100,7 @@ if __name__=='__main__':
     print(cats_list)
 
     # From argparse, None is a string.
-    if mag_lim == 'None':
+    if mag_lim.lower() == 'none':
         mag_lim = None
 
     for cat in cats_list: #[full_cats]:
