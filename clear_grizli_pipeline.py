@@ -20,10 +20,15 @@ import numpy as np
 import os
 import time
 
+from analysis_tools.tables import bypass_table 
 from astropy.io import fits
+from astropy.table import Table
 from set_paths import paths
 #from logging import logging
+# ADD LOGGING WOULD BE NEAT
 
+# Is grizli smart enough to know that these program 13420 fields overlap with 
+# the given CLEAR fields?
 overlapping_fields = {'GN1':['GDN20'],
                       'GN2':['GDN8', 'GDN12', 'GDN21', 'GDN25'],
                       'GN3':['GDN18', 'GDN19', 'GDN22', 'GDN23'],
@@ -32,31 +37,89 @@ overlapping_fields = {'GN1':['GDN20'],
                       'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11']}
 
 
-#------------------------------------------------------------------------------- 
+#-------------------------------------------------------------------------------
 
-def find_files():
+def find_files(fields=['GN2', 'GN4']):
     """
+
+    Parameters
+    ----------
+    fields : list of strings
+        The CLEAR fields; retain ability to specify the individual pointings
+        so that can easily re-run single ones if find an issue.
+
     """
     files = glob.glob(os.path.join(paths['path_to_RAW'], '*flt.fits')) \
         + glob.glob(os.path.join(paths['path_to_RAW_3DHST'], '*flt.fits'))
     info = grizli.utils.get_flt_info(files)
-    visits, filters = grizli.utils.parse_flt_files(info=info, uniquename=True)
+    # 'info' is an astropy table. kill me
 
-    for i in range(len(visits)):
-        print(dict(visits[i]))
+    # Creating a new table and inserting only the rows I want is quite annoying
+    # So to conserve our sanity, just convert 'info' into an ordered dictionary
+    info_dict = bypass_table.decompose_table(info, return_type=dict, include_meta=True)
+
+    new_info_list = []
+
+    # Convert table to ordered dictionary, put it in a list, convert to numpy array
+    # to convert it back into a table. awesome
+    for row in range(len(info_dict['TARGNAME'])):
+        if info_dict['TARGNAME'][row] in fields:
+            new_info_list.append([info_dict[key][row] for key in info_dict.keys() if key != 'meta'])
+        # Now, if one of the fields is GOODS-N, need be sure all the Barro programs
+        # are also retained. 
+        for field in [field for field in fields if 'N' in field]:
+            if info_dict['TARGNAME'][row] in overlapping_fields[field]:
+                new_info_list.append([info_dict[key][row] for key in info_dict.keys() if key != 'meta'])
+                # Break so the Barro programs are added only once.
+                break
+
+    # Convert 'info' back into a table
+    # I couldn't simply do dtype=info.dtype, so instead of hitting my head on the
+    # keyboard for hours, just hard code it
+    new_info_tab = Table(np.array(new_info_list), names=info.colnames, meta=info.meta, 
+        dtype=['S18', 'S5', 'S8', 'S10', 'S8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8'])
+
+    # huzzah it works
+    visits, filters = grizli.utils.parse_flt_files(info=new_info_tab, uniquename=True)
 
     return visits, filters
 
-#------------------------------------------------------------------------------- 
+#-------------------------------------------------------------------------------
+
+def prep(visits, filters):
+    """
+    """
+    for visit in visits:
+        print(visit)
+    print(filters)
+    for filt in filters:
+        print(filt)
+
+    # Match the direct and the grism visits.
+    # Going by order as in the example won't work. 
+    # Might be able to match 'product'.split('.')[0] values from 'visit' dictionary
+
+    """
+    for i in range(2):
+        status = process_direct_grism_visit(
+            direct=visits[i], 
+            grism=visits[i+2],
+            radec='../Catalog/goodss_radec.dat', 
+            align_mag_limits=[14,23])
+    """
+
+
+#-------------------------------------------------------------------------------
 
 def clear_grizli_pipeline():
     """ Main wrapper on pre-processing, interlacing and extracting steps.
     """
 
     visits, filters = find_files()
+    prep(visits, filters)
 
 
-#-------------------------------------------------------------------------------  
+#-------------------------------------------------------------------------------
 
 def parse_args():
     """Parses command line arguments.
