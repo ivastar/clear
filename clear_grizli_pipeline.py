@@ -39,6 +39,9 @@ overlapping_fields = {'GN1':['GDN20'],
 
 #-------------------------------------------------------------------------------
 
+
+# put this all into a huge hideous class, clear_grizli_pipeline? 
+
 def find_files(fields=['GN2', 'GN4']):
     """
 
@@ -48,6 +51,15 @@ def find_files(fields=['GN2', 'GN4']):
         The CLEAR fields; retain ability to specify the individual pointings
         so that can easily re-run single ones if find an issue.
 
+    Returns
+    -------
+    visits : OrderedDict
+        Keys of 'files' and 'products'; values of list of FLT files and product name.
+    filters : OrderedDict
+        Keys of filters; values of OrderedDicts with keys of orient and values of
+        lists of FLT files.
+
+    It's things like these that make me sad.
     """
     files = glob.glob(os.path.join(paths['path_to_RAW'], '*flt.fits')) \
         + glob.glob(os.path.join(paths['path_to_RAW_3DHST'], '*flt.fits'))
@@ -86,27 +98,54 @@ def find_files(fields=['GN2', 'GN4']):
 
 #-------------------------------------------------------------------------------
 
-def prep(visits, filters):
+def prep(visits, prime_filt='F105W', prime_grism='G102'):
     """
+    This is akin to `align_all.py`. 
+
+    Parameters
+    ----------
+
+    Outputs 
+    -------
     """
-    for visit in visits:
-        print(visit)
-    print(filters)
-    for filt in filters:
-        print(filt)
+    path_to_REF = os.path.join(paths['path_to_ref_files'], 'REF')
+    path_to_outputs = paths['path_to_grizli_outputs']
 
     # Match the direct and the grism visits.
     # Going by order as in the example won't work. 
     # Might be able to match 'product'.split('.')[0] values from 'visit' dictionary
+    print(visits)
 
-    """
-    for i in range(2):
-        status = process_direct_grism_visit(
-            direct=visits[i], 
-            grism=visits[i+2],
-            radec='../Catalog/goodss_radec.dat', 
-            align_mag_limits=[14,23])
-    """
+    # this ain't right
+    for visit1 in visits:
+        product1 = visit1['product']
+        filt1 = product1.split('.')[1]
+        basename1 = product1.split('.')[0]
+        if prime_filt.lower() in filt1.lower():
+            # If the filter indicates stare images, search for the grisms
+            for visit2 in visits:
+                # this really ain't right 
+                product2 = visit2['product']
+                filt2 = product2.split('.')[1]
+                basename2 = product2.split('.')[0]
+                field = product2.split('-')[0]
+                if basename1 == basename2 and prime_grism.lower() in filt2.lower():
+                    # Point to correct, field-dependent radec catalog
+                    print("Matched direct to grism products: {} {}".format(product1, product2))
+                    if 'n' in field.lower():
+                        radec_catalog = 'goodsn_radec.cat'
+                        print("Using radec cat for NORTH: {}".format(radec_catalog))
+                    elif 's' in field.lower():
+                        radec_catalog = 'goodss_3dhst.v4.1.radec.cat'
+                        print("Using radec cat for SOUTH: {}".format(radec_catalog))
+
+                    # Do the prep steps.
+                    #status = process_direct_grism_visit(
+                    #    direct=visit1,
+                    #    grism=visit2,
+                    #    radec=os.path.join(path_to_REF, radec_catalog,
+                    #    align_mag_limits=[14,23],
+                    #    path_to_outputs=path_to_outputs)
 
 
 #-------------------------------------------------------------------------------
@@ -116,7 +155,7 @@ def clear_grizli_pipeline():
     """
 
     visits, filters = find_files()
-    prep(visits, filters)
+    prep(visits)
 
 
 #-------------------------------------------------------------------------------
