@@ -20,12 +20,13 @@ import numpy as np
 import os
 import time
 
+from grizli.prep import process_direct_grism_visit
 from analysis_tools.tables import bypass_table 
 from astropy.io import fits
 from astropy.table import Table
 from set_paths import paths
 #from logging import logging
-# ADD LOGGING WOULD BE NEAT
+# ADD LOGGING; WOULD BE NEAT
 
 # Is grizli smart enough to know that these program 13420 fields overlap with 
 # the given CLEAR fields?
@@ -107,6 +108,9 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
 
     Outputs 
     -------
+    In the directory specified by path_to_outputs,
+    * ...
+    * ...
     """
     path_to_REF = os.path.join(paths['path_to_ref_files'], 'REF')
     path_to_outputs = paths['path_to_grizli_outputs']
@@ -125,6 +129,7 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
             # If the filter indicates stare images, search for the grisms
             for visit2 in visits:
                 # this really ain't right 
+                # should be able to pull this out of the dictionary as keys
                 product2 = visit2['product']
                 filt2 = product2.split('.')[1]
                 basename2 = product2.split('.')[0]
@@ -140,12 +145,16 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
                         print("Using radec cat for SOUTH: {}".format(radec_catalog))
 
                     # Do the prep steps.
-                    #status = process_direct_grism_visit(
-                    #    direct=visit1,
-                    #    grism=visit2,
-                    #    radec=os.path.join(path_to_REF, radec_catalog,
-                    #    align_mag_limits=[14,23],
-                    #    path_to_outputs=path_to_outputs)
+                    status = process_direct_grism_visit(
+                        direct=visit1,
+                        grism=visit2,
+                        radec=os.path.join(path_to_REF, radec_catalog),
+                        align_mag_limits=[14,23],
+                        path_to_outputs=path_to_outputs)
+
+
+#-------------------------------------------------------------------------------
+
 
 
 #-------------------------------------------------------------------------------
