@@ -43,7 +43,7 @@ overlapping_fields = {'GN1':['GDN20'],
 
 # put this all into a huge hideous class, clear_grizli_pipeline? 
 
-def find_files(fields=['GN2', 'GN4']):
+def find_files(fields=['GN2']):
     """
 
     Parameters
@@ -101,16 +101,61 @@ def find_files(fields=['GN2', 'GN4']):
 
 def prep(visits, prime_filt='F105W', prime_grism='G102'):
     """
-    This is akin to `align_all.py`. 
+    This is akin to `align_all.py`. It copies the FLTs from 'RAW/' and 
+    performs background subtraction and flat-fielding, extracts visit-level
+    catalogs and seg maps from direct images, and produces aligned, background-
+    subtracted FLTs and drizzled mosaics of both direct and grism images.
 
     Parameters
     ----------
 
     Outputs 
     -------
-    In the directory specified by path_to_outputs,
-    * ...
-    * ...
+    The individual visit outputs are
+
+    * icat21dlq_crclean.fits
+    [are the FLTs modified?]
+
+    In the directory specified by path_to_outputs the combined for direct 
+    images are
+
+    * gn2-cxt-51-345.0-f105w_asn.fits
+    * gn2-cxt-51-345.0-f105w_bkg.fits
+    * gn2-cxt-51-345.0-f105w_drz_sci.fits - drizzled direct mosaic
+    * gn2-cxt-51-345.0-f105w_drz_wht.fits 
+    * gn2-cxt-51-345.0-f105w_seg.fits
+    * gn2-cxt-51-345.0-f105w_wcs.fits 
+    * gn2-cxt-55-022.0-f105w.cat   
+    * gn2-cxt-55-022.0-f105w.cat.radec
+    * gn2-cxt-55-022.0-f105w.cat.reg 
+    * gn2-cxt-53-309.0-f105w_shifts.log 
+
+    For grism images
+
+    * gn2-cxt-51-345.0-g102_asn.fits 
+    * gn2-cxt-51-345.0-g102_drz_sci.fits
+    * gn2-cxt-51-345.0-g102_drz_wht.fits 
+    * gn2-cxt-53-309.0-g102_1_sky_background.info 
+
+    Astrometry:
+    * _wcs.png - diagnostic of [...]
+    * _wcs.log - 
+    * _wcs.fits - 
+
+    Grism sky background subtraction:
+    * _column.png - diagnostic of [...]
+    * _column.dat - produces PNG plot
+
+
+
+
+    Aligned, background-subtracted FLTs 
+
+    Drizzled mosaics
+
+
+    [which are analogs of the old pipeline's files?]
+
     """
     path_to_RAW = paths['path_to_RAW']
     path_to_REF = os.path.join(paths['path_to_ref_files'], 'REF')
@@ -151,9 +196,7 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
                         direct=visit1,
                         grism=visit2,
                         radec=os.path.join(path_to_REF, radec_catalog),
-                        align_mag_limits=[14,23],
-                        path_to_raw=path_to_RAW,
-                        path_to_outputs=path_to_outputs)
+                        align_mag_limits=[14,23])
 
 
 #-------------------------------------------------------------------------------
