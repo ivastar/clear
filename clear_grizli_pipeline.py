@@ -112,8 +112,10 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
     * ...
     * ...
     """
+    path_to_RAW = paths['path_to_RAW']
     path_to_REF = os.path.join(paths['path_to_ref_files'], 'REF')
     path_to_outputs = paths['path_to_grizli_outputs']
+
 
     # Match the direct and the grism visits.
     # Going by order as in the example won't work. 
@@ -150,6 +152,7 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
                         grism=visit2,
                         radec=os.path.join(path_to_REF, radec_catalog),
                         align_mag_limits=[14,23],
+                        path_to_raw=path_to_RAW,
                         path_to_outputs=path_to_outputs)
 
 
