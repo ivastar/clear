@@ -15,18 +15,19 @@ import argparse
 import grizli
 import drizzlepac
 import glob
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import time
 
 from grizli.prep import process_direct_grism_visit
+from grizli.log import setup_logging, log_metadata
+#from grizli.config import path_raw, path_outputs, path_persistence
 from analysis_tools.tables import bypass_table 
 from astropy.io import fits
 from astropy.table import Table
 from set_paths import paths
-#from logging import logging
-# ADD LOGGING; WOULD BE NEAT
 
 # Is grizli smart enough to know that these program 13420 fields overlap with 
 # the given CLEAR fields?
@@ -60,7 +61,6 @@ def find_files(fields=['GN2']):
         Keys of filters; values of OrderedDicts with keys of orient and values of
         lists of FLT files.
 
-    It's things like these that make me sad.
     """
     files = glob.glob(os.path.join(paths['path_to_RAW'], '*flt.fits')) \
         + glob.glob(os.path.join(paths['path_to_RAW_3DHST'], '*flt.fits'))
@@ -99,6 +99,7 @@ def find_files(fields=['GN2']):
 
 #-------------------------------------------------------------------------------
 
+@log_matadata
 def prep(visits, prime_filt='F105W', prime_grism='G102'):
     """
     This is akin to `align_all.py`. It copies the FLTs from 'RAW/' and 
@@ -201,6 +202,74 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
 
 #-------------------------------------------------------------------------------
 
+def make_timestamp_dir(dest):
+    """Creates time-stamped directory. YYYY.MM.DD.hh.mm.ss<_num>
+
+    Parameters
+    ----------
+    dest : string
+        Path to where the time-stamp directory should be created.
+
+    Returns
+    -------
+    path_to_time_dir : string
+        Path to and including the time-stamped directory.
+
+    Outputs
+    -------
+    Directory at 'dest' with a time-stamped name.
+    """
+    time_tuple = time.localtime()
+
+    time_array = np.array(time_tuple, dtype='str')
+    time_array = np.array(['0'+t if len(t)==1 else t for t in time_array])     
+        
+    time_dir = '{}.{}.{}.{}:{}:{}'.format(time_array[0],time_array[1],
+        time_array[2],time_array[3],time_array[4],time_array[5])
+    path_to_time_dir = os.path.join(dest, time_dir)
+    
+    # If one does not exist for today, create the time-stamp dir.
+    if not os.path.isdir(path_to_time_dir):
+        #os.mkdir(path_to_time_dir)
+        return path_to_time_dir
+    
+    # If one already exists, create it with underscore index 1-100.
+    else:
+        for num in range(1,100):
+            path_to_time_dir_num = path_to_time_dir + '_' + str(num)
+            if not os.path.isdir(path_to_time_dir_num):
+                #os.mkdir(path_to_time_dir_num)
+                return path_to_time_dir_num    
+
+
+#-------------------------------------------------------------------------------
+
+def store_outputs(store_type):
+    """
+    This does not deal with sorting extractions. Only the output from 
+    prep and interlacing steps. 
+    It should be easy to go into this directory and recreate the needed
+    extractions, functioning just as outputs always does, only this is
+    a frozen version of outputs that cannot be overwritten.
+
+
+    Parameters
+    ----------
+    store_type : string
+        Either 'prep' or 'interlace', to be appended to directory name.
+
+    Returns
+    -------
+    path_outputs_timestamp : string
+        Path to the outputs
+
+    """
+    path_outputs = make_timestamp_dir(path_outputs)
+    path_outputs_split = make_timestamp_dir.split('/')
+    path_outputs_split[-1] = path_outputs_split[-1] + '_' + store_type
+    path_outputs_timestamp = '/'.join(path_outputs_split)
+
+    return path_outputs_timestamp
 
 
 #-------------------------------------------------------------------------------
@@ -208,9 +277,52 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
 def clear_grizli_pipeline():
     """ Main wrapper on pre-processing, interlacing and extracting steps.
     """
-
     visits, filters = find_files()
     prep(visits)
+
+
+#-------------------------------------------------------------------------------
+
+def make_timestamp_dir(dest):
+    """Creates time-stamped directory. YYYY.MM.DD.hh.mm.ss<_num>
+
+    Parameters
+    ----------
+    dest : string
+        Path to where the time-stamp directory should be created.
+
+    Returns
+    -------
+    path_to_time_dir : string
+        Path to and including the time-stamped directory.
+
+    Outputs
+    -------
+    Directory at 'dest' with a time-stamped name.
+    """
+    time_tuple = time.localtime()
+
+    time_array = np.array(time_tuple, dtype='str')
+    time_array = np.array(['0'+t if len(t)==1 else t for t in time_array])     
+        
+    time_dir = '{}.{}.{}.{}:{}:{}'.format(time_array[0],time_array[1],
+        time_array[2],time_array[3],time_array[4],time_array[5])
+    path_to_time_dir = os.path.join(dest, time_dir)
+    
+    # If one does not exist for today, create the time-stamp dir.
+    if not os.path.isdir(path_to_time_dir):
+        #os.mkdir(path_to_time_dir)
+        print(path_to_time_dir)
+        return path_to_time_dir
+    
+    # If one already exists, create it with underscore index 1-100.
+    else:
+        for num in range(1,100):
+            path_to_time_dir_num = path_to_time_dir + '_' + str(num)
+            if not os.path.isdir(path_to_time_dir_num):
+                #os.mkdir(path_to_time_dir_num)
+                print(path_to_time_dir_num)
+                return path_to_time_dir_num
 
 
 #-------------------------------------------------------------------------------
@@ -242,7 +354,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--fields', dest = 'fields',
                         action = 'store', type = str, required = False,
-                        help = fields_help, nargs='+', default=['GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'])       
+                        help = fields_help, nargs='+', 
+                        default=['GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'])       
     parser.add_argument('--steps', dest = 'do_steps',
                         action = 'store', type = int, required = False,
                         help = do_steps_help,  nargs='+', default=[1,2,3,4,5])    
@@ -264,6 +377,7 @@ def parse_args():
 #------------------------------------------------------------------------------- 
 
 if __name__=='__main__':
+    #setup_logging()
     clear_grizli_pipeline()
 
 
