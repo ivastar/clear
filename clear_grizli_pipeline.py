@@ -20,14 +20,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-from grizli.prep import process_direct_grism_visit
-from grizli import config
-#from grizli.config import path_raw, path_outputs, path_persistence
-from analysis_tools.tables import bypass_table 
 from astropy.io import fits
 from astropy.table import Table
 from set_paths import paths
 from utils import store_outputs, retrieve_latest_outputs
+
+# My grizli fork and other packages
+from analysis_tools.tables import bypass_table 
+from grizli import config
+#from grizli.config import path_raw, path_outputs, path_persistence
+from grizli.prep import process_direct_grism_visit
+from grizli.multifit import GroupFLT, MultiBeam, get_redshift_fit_defaults
 from record_imports.record_imports import meta_record_imports
 from record_imports.log import setup_logging, log_info, log_metadata
 
@@ -207,6 +210,34 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
 
 #-------------------------------------------------------------------------------
 
+@log_metadata():
+def interlace(visits):
+    """
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    
+    """
+    all_grism_files = []
+    for i in range(len(visits)):
+        if '-g1' in visits[i]['product']:
+            all_grism_files.extend(visits[i]['files'])
+        
+    # will need my function to find the right catalogs
+    # should the catalog dictionaries be made globals, importable from a config?
+
+    grp = GroupFLT(grism_files=all_grism_files, direct_files=[], 
+              ref_file='../Catalog/ERS_goodss_3dhst.v4.0.F160W_orig_sci.fits',
+              seg_file='../Catalog/ERS_GOODS-S_IR.seg.fits',
+              catalog='../Catalog/ERS_GOODS-S_IR.cat',
+              cpu_count=8)
+
+#-------------------------------------------------------------------------------
+
+
 @log_info
 @log_metadata
 def clear_grizli_pipeline(path_outputs_timestamp):
@@ -223,6 +254,7 @@ def clear_grizli_pipeline(path_outputs_timestamp):
     prep(visits=visits, prime_filt='F105W', prime_grism='G102')
 
     # Do the interlacing; need have option which outputs subdir to use? (nominally, all will be same)
+    #interlace(visits=visits)
 
     # Do the extractions; need have option which outputs subdir to use? 
 
