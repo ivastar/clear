@@ -21,13 +21,15 @@ import numpy as np
 import os
 
 from grizli.prep import process_direct_grism_visit
-#from grizli.log import setup_logging, log_metadata
+from grizli import config
 #from grizli.config import path_raw, path_outputs, path_persistence
 from analysis_tools.tables import bypass_table 
 from astropy.io import fits
 from astropy.table import Table
 from set_paths import paths
 from utils import store_outputs, retrieve_latest_outputs
+from record_imports.record_imports import meta_record_imports
+from record_imports.log import setup_logging, log_info, log_metadata
 
 path_raw = paths['path_to_RAW']
 path_outputs = paths['path_to_outputs']
@@ -104,7 +106,7 @@ def find_files(fields=['GN2']):
 
 #-------------------------------------------------------------------------------
 
-#@log_metadata
+@log_metadata
 def prep(visits, prime_filt='F105W', prime_grism='G102'):
     """
     This is akin to `align_all.py`. It copies the FLTs from 'RAW/' and 
@@ -205,21 +207,20 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
 
 #-------------------------------------------------------------------------------
 
-def clear_grizli_pipeline():
+@log_info
+@log_metadata
+def clear_grizli_pipeline(path_outputs_timestamp):
     """ Main wrapper on pre-processing, interlacing and extracting steps.
     """
-    # Step 1: Create the output directory
-    path_outputs_timestamp = store_outputs(path_outputs=path_outputs, 
-        store_type='')
-
-    # Step 2: cd into it 
+    # cd into outputs directory, as running grizli requires
     os.chdir(path_outputs_timestamp)
+    logging.info("cd into {}".format(path_outputs_timestamp))
 
     # Find the files in RAW
     visits, filters = find_files()
 
     # In outputs run the prepsteps
-    prep(visits)
+    prep(visits=visits, prime_filt='F105W', prime_grism='G102')
 
     # Do the interlacing; need have option which outputs subdir to use? (nominally, all will be same)
 
@@ -280,7 +281,13 @@ def parse_args():
 #------------------------------------------------------------------------------- 
 
 if __name__=='__main__':
-    #setup_logging()
-    clear_grizli_pipeline()
+    # Create the output directory
+    path_outputs_timestamp = store_outputs(path_outputs=path_outputs, 
+        store_type='')
+    # Setup logging to save in the output directory
+    setup_logging(__file__, path_logs=path_outputs_timestamp)
+    #meta_record_imports(__file__, print_or_log='print') #but how direct this to a log file?
+    # Call the main pipeline function.
+    clear_grizli_pipeline(path_outputs_timestamp=path_outputs_timestamp)
 
 
