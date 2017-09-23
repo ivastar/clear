@@ -41,6 +41,8 @@ path_ref = os.path.join(paths['path_to_ref_files'], 'REF')
 
 # Is grizli smart enough to know that these program 13420 fields overlap with 
 # the given CLEAR fields?
+
+# should overlapping_fields and pointing be put in their own module?
 overlapping_fields = {'GN1':['GDN20'],
                       'GN2':['GDN8', 'GDN12', 'GDN21', 'GDN25'],
                       'GN3':['GDN18', 'GDN19', 'GDN22', 'GDN23'],
@@ -48,13 +50,35 @@ overlapping_fields = {'GN1':['GDN20'],
                       'GN5':['GDN17', 'GDN18'],
                       'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11']}
 
+class Pointing():
+    """ Generalization of GN1, GS1, ERSPRIME, etc
+    """
+    def __init__(self, field, ref_filter):
+        if 'N' in field:
+            self.radec_catalog = 'goodsn_radec.cat'
+            self.seg_map = 'Goods_N_plus_seg.fits'
+            if '125' in ref_filter:
+                self.catalog = 'GoodsN_plus_merged.cat'
+                self.ref_image = 'goodsn_3dhst.v4.0.F125W_orig_sci.fits'
+            if '105' in ref_filter:
+                self.catalog = 'goodsn-F105W-astrodrizzle-v4.4_drz_sub_plus.cat'
+                self.ref_image = 'goodsn-F105W-astrodrizzle-v4.4_drz_sci.fits'
+        if 'S' in field:
+            self.radec_catalog = 'goodss_3dhst.v4.1.radec.cat'
+            self.seg_map = 'Goods_S_plus_seg.fits'
+            if '125' in ref_filter:
+                self.catalog = 'GoodsS_plus_merged.cat'
+                self.ref_image = 'goodss_3dhst.v4.0.F125W_orig_sci.fits'  
+            if '105' in ref_filter:
+                self.catalog = 'goodss-F105W-astrodrizzle-v4.3_drz_sub_plus.cat'
+                self.ref_image = 'goodss-F105W-astrodrizzle-v4.3_drz_sci.fits'
 
 #-------------------------------------------------------------------------------
 
 
 # put this all into a huge hideous class, clear_grizli_pipeline? 
 
-def find_files(fields=['GN2']):
+def find_files(fields):
     """
 
     Parameters
@@ -110,7 +134,7 @@ def find_files(fields=['GN2']):
 #-------------------------------------------------------------------------------
 
 @log_metadata
-def prep(visits, prime_filt='F105W', prime_grism='G102'):
+def prep(visits, ref_filter='F105W', ref_grism='G102'):
     """
     This is akin to `align_all.py`. It copies the FLTs from 'RAW/' and 
     performs background subtraction and flat-fielding, extracts visit-level
@@ -180,7 +204,7 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
         product1 = visit1['product']
         filt1 = product1.split('.')[1]
         basename1 = product1.split('.')[0]
-        if prime_filt.lower() in filt1.lower():
+        if ref_filter.lower() in filt1.lower():
             # If the filter indicates stare images, search for the grisms
             for visit2 in visits:
                 # this really ain't right 
@@ -189,15 +213,12 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
                 filt2 = product2.split('.')[1]
                 basename2 = product2.split('.')[0]
                 field = product2.split('-')[0]
-                if basename1 == basename2 and prime_grism.lower() in filt2.lower():
+                if basename1 == basename2 and ref_grism.lower() in filt2.lower():
                     # Point to correct, field-dependent radec catalog
                     print("Matched direct to grism products: {} {}".format(product1, product2))
-                    if 'n' in field.lower():
-                        radec_catalog = 'goodsn_radec.cat'
-                        print("Using radec cat for NORTH: {}".format(radec_catalog))
-                    elif 's' in field.lower():
-                        radec_catalog = 'goodss_3dhst.v4.1.radec.cat'
-                        print("Using radec cat for SOUTH: {}".format(radec_catalog))
+                    p = Pointing(field=field, ref_filter=ref_filter)
+                    radec_catalog = p.radec_catalog
+                    print("Using radec catalog: {}".format(radec_catalog))
 
                     # Do the prep steps.
                     status = process_direct_grism_visit(
@@ -211,7 +232,7 @@ def prep(visits, prime_filt='F105W', prime_grism='G102'):
 #-------------------------------------------------------------------------------
 
 @log_metadata():
-def interlace(visits):
+def interlace(visits, fields, ref_filter):
     """
 
     Parameters
@@ -219,8 +240,11 @@ def interlace(visits):
 
     Returns
     -------
-    
+
     """
+    # need loop over fields? 
+    # how extract that from visits?
+
     all_grism_files = []
     for i in range(len(visits)):
         if '-g1' in visits[i]['product']:
@@ -240,7 +264,7 @@ def interlace(visits):
 
 @log_info
 @log_metadata
-def clear_grizli_pipeline(path_outputs_timestamp):
+def clear_grizli_pipeline(path_outputs_timestamp, fields=['GN2'], ref_filter='F105W'):
     """ Main wrapper on pre-processing, interlacing and extracting steps.
     """
     # cd into outputs directory, as running grizli requires
@@ -248,10 +272,10 @@ def clear_grizli_pipeline(path_outputs_timestamp):
     logging.info("cd into {}".format(path_outputs_timestamp))
 
     # Find the files in RAW
-    visits, filters = find_files()
+    visits, filters = find_files(fields=fields)
 
     # In outputs run the prepsteps
-    prep(visits=visits, prime_filt='F105W', prime_grism='G102')
+    prep(visits=visits, ref_filt='F105W', ref_grism='G102')
 
     # Do the interlacing; need have option which outputs subdir to use? (nominally, all will be same)
     #interlace(visits=visits)
