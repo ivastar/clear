@@ -34,10 +34,10 @@ from grizli.multifit import GroupFLT, MultiBeam, get_redshift_fit_defaults
 from record_imports.record_imports import meta_record_imports
 from record_imports.log import setup_logging, log_info, log_metadata
 
-path_raw = paths['path_to_RAW']
-path_outputs = paths['path_to_outputs']
-path_ref = os.path.join(paths['path_to_ref_files'], 'REF')
-
+# Set global paths.
+PATH_RAW = paths['path_to_RAW']
+PATH_OUTPUTS = paths['path_to_outputs']
+PATH_REF = os.path.join(paths['path_to_ref_files'], 'REF')
 
 # Is grizli smart enough to know that these program 13420 fields overlap with 
 # the given CLEAR fields?
@@ -224,8 +224,8 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
                     status = process_direct_grism_visit(
                         direct=visit1,
                         grism=visit2,
-                        radec=os.path.join(path_ref, radec_catalog),
-                        path_raw=path_raw,
+                        radec=os.path.join(PATH_REF, radec_catalog),
+                        path_raw=PATH_RAW,
                         align_mag_limits=[14,23])
 
 
@@ -253,10 +253,12 @@ def interlace(visits, fields, ref_filter):
     # will need my function to find the right catalogs
     # should the catalog dictionaries be made globals, importable from a config?
 
+    p = Pointing(field=field, ref_filter=ref_filter)
+
     grp = GroupFLT(grism_files=all_grism_files, direct_files=[], 
-              ref_file='../Catalog/ERS_goodss_3dhst.v4.0.F160W_orig_sci.fits',
-              seg_file='../Catalog/ERS_GOODS-S_IR.seg.fits',
-              catalog='../Catalog/ERS_GOODS-S_IR.cat',
+              ref_file=os.path.join(PATH_REF, p.ref_image),
+              seg_file=os.path.join(PATH_REF, p.seg_map),
+              catalog=os.path.join(PATH_REF, p.catalog),
               cpu_count=8)
 
 #-------------------------------------------------------------------------------
@@ -337,12 +339,24 @@ def parse_args():
 #------------------------------------------------------------------------------- 
 
 if __name__=='__main__':
+    # Parse user inputs
+    # (not yet implemented)
+    args = parse_args()
+    fields = args.fields
+    do_steps = args.do_steps
+    mag_lim = args.mag_lim
+    ref_filter = args.ref_filter
+    cat_names = args.cats
+
     # Create the output directory
-    path_outputs_timestamp = store_outputs(path_outputs=path_outputs, 
+    path_outputs_timestamp = store_outputs(path_outputs=PATH_OUTPUTS, 
         store_type='')
+
     # Setup logging to save in the output directory
     setup_logging(__file__, path_logs=path_outputs_timestamp)
+
     #meta_record_imports(__file__, print_or_log='print') #but how direct this to a log file?
+
     # Call the main pipeline function.
     clear_grizli_pipeline(path_outputs_timestamp=path_outputs_timestamp)
 
