@@ -19,6 +19,8 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import shutil
+import time
 
 from astropy.io import fits
 from astropy.table import Table
@@ -39,6 +41,11 @@ PATH_RAW = paths['path_to_RAW']
 PATH_OUTPUTS = paths['path_to_outputs']
 PATH_REF = os.path.join(paths['path_to_ref_files'], 'REF')
 
+# Create the output directory
+PATH_OUTPUTS_TIMESTAMP = store_outputs(path_outputs=PATH_OUTPUTS, 
+        store_type='')
+
+
 # Is grizli smart enough to know that these program 13420 fields overlap with 
 # the given CLEAR fields?
 
@@ -54,24 +61,28 @@ class Pointing():
     """ Generalization of GN1, GS1, ERSPRIME, etc
     """
     def __init__(self, field, ref_filter):
-        if 'N' in field:
+        if 'N' in field.upper():
+            self.pad = 500
             self.radec_catalog = 'goodsn_radec.cat'
             self.seg_map = 'Goods_N_plus_seg.fits'
             if '125' in ref_filter:
                 self.catalog = 'GoodsN_plus_merged.cat'
                 self.ref_image = 'goodsn_3dhst.v4.0.F125W_orig_sci.fits'
-            if '105' in ref_filter:
+            elif '105' in ref_filter:
                 self.catalog = 'goodsn-F105W-astrodrizzle-v4.4_drz_sub_plus.cat'
                 self.ref_image = 'goodsn-F105W-astrodrizzle-v4.4_drz_sci.fits'
-        if 'S' in field:
+                
+        elif 'S' in field.upper():
+            self.pad = 200 # grizli default
             self.radec_catalog = 'goodss_3dhst.v4.1.radec.cat'
             self.seg_map = 'Goods_S_plus_seg.fits'
             if '125' in ref_filter:
                 self.catalog = 'GoodsS_plus_merged.cat'
                 self.ref_image = 'goodss_3dhst.v4.0.F125W_orig_sci.fits'  
-            if '105' in ref_filter:
+            elif '105' in ref_filter:
                 self.catalog = 'goodss-F105W-astrodrizzle-v4.3_drz_sub_plus.cat'
                 self.ref_image = 'goodss-F105W-astrodrizzle-v4.3_drz_sci.fits'
+            
 
 #-------------------------------------------------------------------------------
 
@@ -154,6 +165,8 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
     In the directory specified by path_to_outputs the combined for direct 
     images are
 
+    * flt.fits - modified, only outputs needed for interlace step
+
     * gn2-cxt-51-345.0-f105w_asn.fits
     * gn2-cxt-51-345.0-f105w_bkg.fits
     * gn2-cxt-51-345.0-f105w_drz_sci.fits - drizzled direct mosaic
@@ -192,7 +205,6 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
     [which are analogs of the old pipeline's files?]
 
     """
-    
 
     # Match the direct and the grism visits.
     # Going by order as in the example won't work. 
@@ -221,6 +233,9 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
                     print("Using radec catalog: {}".format(radec_catalog))
 
                     # Do the prep steps.
+                    logging.info(" ")
+                    logging.info("process_direct_grism_visit on direct {} and grism {}"\
+                        .format(visit1, visit2))
                     status = process_direct_grism_visit(
                         direct=visit1,
                         grism=visit2,
@@ -231,56 +246,118 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
 
 #-------------------------------------------------------------------------------
 
-@log_metadata():
-def interlace(visits, fields, ref_filter):
+@log_metadata
+def interlace(visits, fields=[], ref_filter='', use_prep_path='.'):
     """
 
     Parameters
     ----------
+    visits :
 
-    Returns
+    fields : list of strings
+        Generally will be the same as in the prep step, unless for some reason
+        you wish to run over a subset.
+    ref_filter : strings
+
+    use_prep_path : string
+
+
+    Outputs
     -------
 
     """
-    # need loop over fields? 
-    # how extract that from visits?
-
-    all_grism_files = []
-    for i in range(len(visits)):
-        if '-g1' in visits[i]['product']:
-            all_grism_files.extend(visits[i]['files'])
         
-    # will need my function to find the right catalogs
-    # should the catalog dictionaries be made globals, importable from a config?
+    for field in fields:
 
-    p = Pointing(field=field, ref_filter=ref_filter)
+        grism_files = []
+        all_flt_files = []
+        for i in range(len(visits)):
+            # e.g., visits[i]['product'] = 'gn2-cxt-51-345.0-g102'  
+            print(visits[i]['product'])
+            field_in_contest = visits[i]['product'].split('-')[0].upper()
+            print(field_in_contest)   
+            if '-g1' in visits[i]['product']:
+                # Only add to list the grism files IF they are among the specified
+                # fields
+                if field_in_contest in overlapping_fields[field] or \
+                    field_in_contest == field:
+                    grism_files.extend(visits[i]['files'])
+                    all_flt_files.extend(visits[i]['files'])
+            elif '-f1' in visits[i]['product']:
+                if field_in_contest in overlapping_fields[field] or \
+                    field_in_contest == field:
+                    all_flt_files.extend(visits[i]['files'])
 
-    grp = GroupFLT(grism_files=all_grism_files, direct_files=[], 
-              ref_file=os.path.join(PATH_REF, p.ref_image),
-              seg_file=os.path.join(PATH_REF, p.seg_map),
-              catalog=os.path.join(PATH_REF, p.catalog),
-              cpu_count=8)
+        p = Pointing(field=field, ref_filter=ref_filter)
+        
+        # If interlacing on a later run than when generating prep step files,
+        # copy the pre-processed FLTs to the current time-stamp directory.
+        # Brammer says only *FLTs produced by prep are needed, since for CLEAR
+        # we are providing the ref_file, seg_file, and catalog.
+        if use_prep_path != '.':
+            all_flt_files = [os.path.join(use_prep_path, flt) for flt in all_flt_files]
+            # Copy only the FLT files for the given field.
+            for flt in all_flt_files:
+                # assuming have cd'd into the outputs location
+                logging.info("Copying {} from {} to {}"\
+                    .format(flt, use_prep_path, PATH_OUTPUTS_TIMESTAMP))
+                shutil.copy(flt, '.')
+
+            # Create a readme listing origin of the prep files
+            with open('README.txt', 'w') as readme:
+                readme.write('{}\n'.format(time.ctime()))
+                readme.write('FLT files copied from {}\n'.format(use_prep_path))
+
+        # Do interlacing and [...]
+        logging.info(" ")
+        logging.info("GroupFLT on field {}".format(field))
+        grp = GroupFLT(grism_files=grism_files, direct_files=[], 
+                  ref_file=os.path.join(PATH_REF, p.ref_image),
+                  seg_file=os.path.join(PATH_REF, p.seg_map),
+                  catalog=os.path.join(PATH_REF, p.catalog),
+                  pad=p.pad,
+                  cpu_count=8)
+
+        # save grp.
+        grp.save_full_data()
+        
+
+def extract():
+    """
+    """
+    # reload grp?
+    # don't need a new timestamp dir? Because always will be copying Extractions and
+    # fits to the Extractions directory? (and finals to RELEASE?)
 
 #-------------------------------------------------------------------------------
 
 
 @log_info
 @log_metadata
-def clear_grizli_pipeline(path_outputs_timestamp, fields=['GN2'], ref_filter='F105W'):
+def clear_grizli_pipeline(fields, ref_filter='F105W', 
+    do_steps=['prep', 'interlace', 'extract', 'fit']):
     """ Main wrapper on pre-processing, interlacing and extracting steps.
     """
     # cd into outputs directory, as running grizli requires
-    os.chdir(path_outputs_timestamp)
-    logging.info("cd into {}".format(path_outputs_timestamp))
+    os.chdir(PATH_OUTPUTS_TIMESTAMP)
+    logging.info("cd into {}".format(PATH_OUTPUTS_TIMESTAMP))
 
     # Find the files in RAW
     visits, filters = find_files(fields=fields)
 
     # In outputs run the prepsteps
-    prep(visits=visits, ref_filt='F105W', ref_grism='G102')
+    if 'prep' in do_steps:
+        logging.info(" ")
+        logging.info("PERFORMING PREP STEP")
+        logging.info("...")
+        prep(visits=visits, ref_filt='F105W', ref_grism='G102')
 
     # Do the interlacing; need have option which outputs subdir to use? (nominally, all will be same)
-    #interlace(visits=visits)
+    if 'interlace' in do_steps:
+        logging.info(" ")
+        logging.info("PERFORMING INTERLACE STEP")
+        logging.info("...")
+        interlace(visits=visits, fields=fields, ref_filter=ref_filter, use_prep_path=os.path.join(PATH_OUTPUTS, '2017.09.22.15.30.29'))
 
     # Do the extractions; need have option which outputs subdir to use? 
 
@@ -302,13 +379,12 @@ def parse_args():
     fields_help = "List the fields over which to run pipeline. Default is all. "
     ref_filter_help = "The reference image filter. Choose either F105W or F125W. Default is F105W. "
     mag_lim_help = "The magnitude limit for extraction. Default is 25."
-    do_steps_help = "List the processing steps to run. Default is all five. Steps are NOT independent. " 
+    do_steps_help = "List the processing steps to run. Default is all four. Steps are NOT independent. " 
     do_steps_help += "If choose to run a step alone, be sure products exist from the previous step. "
-    do_steps_help += "1 - Interlace visits. "
-    do_steps_help += "2 - Create contamination model. "
-    do_steps_help += "3 - Extract traces. "
-    do_steps_help += "4 - Stack traces. "
-    do_steps_help += "5 - Fit redshifts and emission lines of traces. "
+    do_steps_help += "  prep "
+    do_steps_help += "  interlace "
+    do_steps_help += "  extract "
+    do_steps_help += "  fit "
     cats_help = "List of catalogs over which to run pipeline. Use in combination with mag_lim. "
     cats_help += "Default is 'full', which is generally used when extracting by mag_lim. "
     cats_help += "Catalog options are 'full', and its subsets, 'emitters', 'quiescent', 'sijie', and 'zn'. "
@@ -320,7 +396,7 @@ def parse_args():
                         default=['GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'])       
     parser.add_argument('--steps', dest = 'do_steps',
                         action = 'store', type = int, required = False,
-                        help = do_steps_help,  nargs='+', default=[1,2,3,4,5])    
+                        help = do_steps_help,  nargs='+', default=['prep', 'interlace', 'extract', 'fit'])    
     parser.add_argument('--mlim', dest = 'mag_lim',
                         action = 'store', required = False,
                         help = mag_lim_help, default=25)
@@ -348,16 +424,12 @@ if __name__=='__main__':
     ref_filter = args.ref_filter
     cat_names = args.cats
 
-    # Create the output directory
-    path_outputs_timestamp = store_outputs(path_outputs=PATH_OUTPUTS, 
-        store_type='')
-
     # Setup logging to save in the output directory
-    setup_logging(__file__, path_logs=path_outputs_timestamp)
+    setup_logging(__file__, path_logs=PATH_OUTPUTS_TIMESTAMP)
 
     #meta_record_imports(__file__, print_or_log='print') #but how direct this to a log file?
 
     # Call the main pipeline function.
-    clear_grizli_pipeline(path_outputs_timestamp=path_outputs_timestamp)
+    clear_grizli_pipeline(fields=['GN2'], ref_filter='F105W', do_steps=['interlace'])
 
 
