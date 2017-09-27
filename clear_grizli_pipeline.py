@@ -1,12 +1,22 @@
 #! /usr/bin/env python
 
-"""
+""" Grizli pipeline for the CLEAR collaboration.  
 
 Author:
 
     C.M. Gosmeyer, Aug. 2017
 
+Notes:
 
+    * This loops over CLEAR 'fields' (GN1, GS1, ERSPRIME, etc).
+      It's not actually necssary, since grizli is smart enough to
+      match overlapping exposures without grouping them yourself.
+      But I decided to allow the user to select the specific fields
+      to make easier re-running troublesome fields and easier for 
+      me to process fields on my laptop (doing the full chunks of 
+      Goods-S or Goods-N would set it on fire). The user is still
+      able to do all fields by default, however. See the arg parse
+      options.
 
 """
 from __future__ import print_function
@@ -25,12 +35,11 @@ import time
 from astropy.io import fits
 from astropy.table import Table
 from set_paths import paths
-from utils import store_outputs, retrieve_latest_outputs
+from utils import store_outputs, retrieve_latest_outputs, tobool
+from clear_inspection_tools import flt_residuals
 
-# My grizli fork and other packages
+# My grizli fork and other personal packages
 from analysis_tools.tables import bypass_table 
-from grizli import config
-#from grizli.config import path_raw, path_outputs, path_persistence
 from grizli.prep import process_direct_grism_visit
 from grizli.multifit import GroupFLT, MultiBeam, get_redshift_fit_defaults
 from record_imports.record_imports import meta_record_imports
@@ -41,13 +50,7 @@ PATH_RAW = paths['path_to_RAW']
 PATH_OUTPUTS = paths['path_to_outputs']
 PATH_REF = os.path.join(paths['path_to_ref_files'], 'REF')
 
-# Create the output directory
-PATH_OUTPUTS_TIMESTAMP = store_outputs(path_outputs=PATH_OUTPUTS, 
-        store_type='')
-
-
-# Is grizli smart enough to know that these program 13420 fields overlap with 
-# the given CLEAR fields?
+global PATH_OUTPUTS_TIMESTAMP
 
 # should overlapping_fields and pointing be put in their own module?
 overlapping_fields = {'GN1':['GDN20'],
@@ -62,7 +65,7 @@ class Pointing():
     """
     def __init__(self, field, ref_filter):
         if 'N' in field.upper():
-            self.pad = 500
+            self.pad = 500 # really only necessary for GDN
             self.radec_catalog = 'goodsn_radec.cat'
             self.seg_map = 'Goods_N_plus_seg.fits'
             if '125' in ref_filter:
@@ -86,8 +89,6 @@ class Pointing():
 
 #-------------------------------------------------------------------------------
 
-
-# put this all into a huge hideous class, clear_grizli_pipeline? 
 
 def find_files(fields):
     """
@@ -113,7 +114,7 @@ def find_files(fields):
     # 'info' is an astropy table.
 
     # Creating a new table and inserting only the rows I want is quite annoying
-    # So to conserve our sanity, just convert 'info' into an ordered dictionary
+    # Just convert 'info' into an ordered dictionary
     info_dict = bypass_table.decompose_table(info, return_type=dict, include_meta=True)
 
     new_info_list = []
@@ -132,15 +133,14 @@ def find_files(fields):
                 break
 
     # Convert 'info' back into a table
-    # I couldn't simply do dtype=info.dtype, so instead of hitting my head on the
-    # keyboard for hours, just hard code it
+    # I couldn't simply do dtype=info.dtype, so just hard code it
     new_info_tab = Table(np.array(new_info_list), names=info.colnames, meta=info.meta, 
         dtype=['S18', 'S5', 'S8', 'S10', 'S8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8'])
 
-    # huzzah it works
     visits, filters = grizli.utils.parse_flt_files(info=new_info_tab, uniquename=True)
 
     return visits, filters
+
 
 #-------------------------------------------------------------------------------
 
@@ -154,6 +154,12 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
 
     Parameters
     ----------
+    visits :
+
+    ref_filter : string
+        The reference image's filter.
+    ref_grism : string
+        The grism.
 
     Outputs 
     -------
@@ -165,7 +171,7 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
     In the directory specified by path_to_outputs the combined for direct 
     images are
 
-    * flt.fits - modified, only outputs needed for interlace step
+    * flt.fits - modified, only outputs needed for model step
 
     * gn2-cxt-51-345.0-f105w_asn.fits
     * gn2-cxt-51-345.0-f105w_bkg.fits
@@ -211,7 +217,6 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
     # Might be able to match 'product'.split('.')[0] values from 'visit' dictionary
     print(visits)
 
-    # this ain't right
     for visit1 in visits:
         product1 = visit1['product']
         filt1 = product1.split('.')[1]
@@ -219,8 +224,7 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
         if ref_filter.lower() in filt1.lower():
             # If the filter indicates stare images, search for the grisms
             for visit2 in visits:
-                # this really ain't right 
-                # should be able to pull this out of the dictionary as keys
+                # would be better to pull this out of the dictionary as keys
                 product2 = visit2['product']
                 filt2 = product2.split('.')[1]
                 basename2 = product2.split('.')[0]
@@ -243,12 +247,14 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
                         path_raw=PATH_RAW,
                         align_mag_limits=[14,23])
 
+    # need make some inspection tools
+
 
 #-------------------------------------------------------------------------------
 
 @log_metadata
-def interlace(visits, fields=[], ref_filter='', use_prep_path='.'):
-    """
+def model(visits, fields=[], ref_filter='', use_prep_path='.'):
+    """ Model the contamination.
 
     Parameters
     ----------
@@ -257,16 +263,21 @@ def interlace(visits, fields=[], ref_filter='', use_prep_path='.'):
     fields : list of strings
         Generally will be the same as in the prep step, unless for some reason
         you wish to run over a subset.
-    ref_filter : strings
-
+    ref_filter : string
+        The reference image's filter.
     use_prep_path : string
-
+        Path to the pre-processed files. By default the working directory.
 
     Outputs
     -------
+    * icat08hiq_flt.01.wcs.fits
+    * icat08hiq.01.GrismFLT.fits
+    * icat08hiq.01.GrismFLT.pkl - contains what? 
+
 
     """
-        
+    grp_dict = {}
+
     for field in fields:
 
         grism_files = []
@@ -290,10 +301,11 @@ def interlace(visits, fields=[], ref_filter='', use_prep_path='.'):
 
         p = Pointing(field=field, ref_filter=ref_filter)
         
-        # If interlacing on a later run than when generating prep step files,
+        # If modeling on a later run than when generating prep step files,
         # copy the pre-processed FLTs to the current time-stamp directory.
         # Brammer says only *FLTs produced by prep are needed, since for CLEAR
         # we are providing the ref_file, seg_file, and catalog.
+
         if use_prep_path != '.':
             all_flt_files = [os.path.join(use_prep_path, flt) for flt in all_flt_files]
             # Copy only the FLT files for the given field.
@@ -308,7 +320,8 @@ def interlace(visits, fields=[], ref_filter='', use_prep_path='.'):
                 readme.write('{}\n'.format(time.ctime()))
                 readme.write('FLT files copied from {}\n'.format(use_prep_path))
 
-        # Do interlacing and [...]
+
+        # Do modeling
         logging.info(" ")
         logging.info("GroupFLT on field {}".format(field))
         grp = GroupFLT(grism_files=grism_files, direct_files=[], 
@@ -318,28 +331,133 @@ def interlace(visits, fields=[], ref_filter='', use_prep_path='.'):
                   pad=p.pad,
                   cpu_count=8)
 
-        # save grp.
-        grp.save_full_data()
-        
+        grp.compute_full_model(mag_limit=26)  # mag limit for contam model
+        grp.refine_list(poly_order=2, mag_limits=[16, 24])
 
-def extract():
-    """
-    """
-    # reload grp?
-    # don't need a new timestamp dir? Because always will be copying Extractions and
-    # fits to the Extractions directory? (and finals to RELEASE?)
+        # how should I inspect these?
+        #flt_residuals(grp)
+
+        # Save grp.
+        grp.save_full_data()
+
+        # Add to dictionary.
+        grp_dict[field] = grp
+
+    return grp_dict
+        
 
 #-------------------------------------------------------------------------------
 
+@log_metadata
+def fit(grp=None, mag_lim=35, use_model_path='.'):
+    """
+    Extract, stack, and fit (z and em lines).
+
+    Parameters
+    ----------
+    mag_lim : int
+        The magnitude limit of sources to extract and fit.
+        By default '35', unrealistically high so to include everything.
+
+    [will this create 1D and 2D traces for individual extractions, as well
+    as the stack?]
+
+    [do I really want the stacking and fitting to be in same function?]
+
+    """
+    # if grp == None, reload grp?
+    # don't need a new timestamp dir? Because always will be copying Extractions and
+    # fits to the Extractions directory? (and finals to RELEASE?)
+
+    for id, mag in zip(np.array(grp.catalog['NUMBER']), np.array(grp.catalog['MAG_AUTO'])):
+        if mag <= mag_lim:
+            print(id, mag)
+            # Extract the 2D traces
+            beams = grp.get_beams(id, size=80) #size??
+            mb = MultiBeam(beams, fcontam=1, group='')  # make group be pointing
+
+            # Run the redshift fit and generate the emission line map
+            #pzfit_def, pspec2_def, pline_def = get_redshift_fit_defaults()
+            #out = mb.run_full_diagnostics(pzfit=pzfit_def, pspec2=pspec2_def, 
+            #    pline=pline_def, GroupFLT=grp, prior=None)
+
+            #fit, fig, fig2, hdu2, hdu_line = out
+
+            # Save a FITS file with the 2D cutouts (beams) from the individual exposures
+            mb.write_master_fits()
+
+            # Fit polynomial model for initial continuum subtraction
+            wave = np.linspace(2000,2.5e4,100)
+            poly_templates = grizli.utils.polynomial_templates(wave, order=7)
+            pfit = mb.template_at_z(
+                z=0, 
+                templates=poly_templates, 
+                fit_background=True, 
+                fitter='lstsq', 
+                get_uncertainties=2)
+
+            # Drizzle grisms / PAs
+            hdu, fig = mb.drizzle_grisms_and_PAs(
+                fcontam=0.2, 
+                flambda=False, 
+                kernel='point', 
+                size=32, 
+                zfit=pfit)
+
+            # Save drizzled ("stacked") 2D trace as PNG and FITS
+            fig.savefig('{0}_{1:05d}.stack.png'.format(target, id))
+            hdu.writeto('{0}_{1:05d}.stack.fits'.format(target, id), clobber=True)
+
+
+            # Fit the emission lines and redshifts
+            out = grizli.fitting.run_all(
+                id, 
+                t0=templ0, 
+                t1=templ1, 
+                fwhm=1200, 
+                zr=[0.5, 2.3], 
+                dz=[0.004, 0.0005], 
+                fitter='nnls', 
+                group_name='', #make field
+                prior=None, 
+                fcontam=0.,
+                pline=pline, 
+                mask_sn_limit=7, 
+                fit_beams=True, 
+                fit_stacks=False,  
+                root=target+'_', #change this
+                fit_trace_shift=False, 
+                verbose=True, 
+                phot=None, 
+                scale_photometry=False, 
+                show_beams=True)
+
+            mb, st, fit, tfit, line_hdu = out
+
+#-------------------------------------------------------------------------------
 
 @log_info
 @log_metadata
-def clear_grizli_pipeline(fields, ref_filter='F105W', 
-    do_steps=['prep', 'interlace', 'extract', 'fit']):
-    """ Main wrapper on pre-processing, interlacing and extracting steps.
+def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
+    do_steps=['prep', 'model', 'fit']):
+    """ Main wrapper on pre-processing, modeling and extracting/fitting steps.
+
+    Parameters
+    ----------
+    fields : list of strings
+        The CLEAR fields; retain ability to specify the individual pointings
+        so that can easily re-run single ones if find an issue.
+    ref_filter : string
+        The reference image's filter.
+    mag_lim : int
+        The magnitude limit of sources to extract and fit.
+    do_steps : list of strings
+        The pipeline steps to run.     
+
     """
     # cd into outputs directory, as running grizli requires
     os.chdir(PATH_OUTPUTS_TIMESTAMP)
+    #os.chdir(os.path.join(PATH_OUTPUTS, '2017.09.25.14.26.28'))
     logging.info("cd into {}".format(PATH_OUTPUTS_TIMESTAMP))
 
     # Find the files in RAW
@@ -348,20 +466,32 @@ def clear_grizli_pipeline(fields, ref_filter='F105W',
     # In outputs run the prepsteps
     if 'prep' in do_steps:
         logging.info(" ")
-        logging.info("PERFORMING PREP STEP")
+        logging.info("PERFORMING PRE-PROCESSING STEP")
         logging.info("...")
         prep(visits=visits, ref_filt='F105W', ref_grism='G102')
 
-    # Do the interlacing; need have option which outputs subdir to use? (nominally, all will be same)
-    if 'interlace' in do_steps:
+    # Do the modeling; need have option which outputs subdir to use? (nominally, all will be same)
+    if 'model' in do_steps:
         logging.info(" ")
-        logging.info("PERFORMING INTERLACE STEP")
+        logging.info("PERFORMING MODELING STEP")
         logging.info("...")
-        interlace(visits=visits, fields=fields, ref_filter=ref_filter, use_prep_path=os.path.join(PATH_OUTPUTS, '2017.09.22.15.30.29'))
-
-    # Do the extractions; need have option which outputs subdir to use? 
+        if 'prep' in do_steps:
+            use_prep_path='.'
+        #grp_dict = model(visits=visits, fields=fields, ref_filter=ref_filter, 
+        #    mag_lim=mag_lim, use_prep_path=os.path.join(PATH_OUTPUTS, '2017.09.22.15.30.29'))
+        # make this return a directory path?
+        #print(grp_dict)
 
     # Do the fitting; need have option which outputs subdir to use? 
+    if 'fit' in do_steps:
+        logging.info(" ")
+        logging.info("PERFORMING EXTRACTING/STACKING/FITTING STEP")
+        logging.info("...")
+        if 'model' in do_steps:
+           use_model_path = '.'
+        #   grp != None
+        #fit()
+        
 
 
 #-------------------------------------------------------------------------------
@@ -379,33 +509,35 @@ def parse_args():
     fields_help = "List the fields over which to run pipeline. Default is all. "
     ref_filter_help = "The reference image filter. Choose either F105W or F125W. Default is F105W. "
     mag_lim_help = "The magnitude limit for extraction. Default is 25."
-    do_steps_help = "List the processing steps to run. Default is all four. Steps are NOT independent. " 
+    do_steps_help = "List the processing steps to run. Default is all three. Steps are NOT independent. " 
     do_steps_help += "If choose to run a step alone, be sure products exist from the previous step. "
     do_steps_help += "  prep "
-    do_steps_help += "  interlace "
-    do_steps_help += "  extract "
+    do_steps_help += "  model "
     do_steps_help += "  fit "
-    cats_help = "List of catalogs over which to run pipeline. Use in combination with mag_lim. "
-    cats_help += "Default is 'full', which is generally used when extracting by mag_lim. "
-    cats_help += "Catalog options are 'full', and its subsets, 'emitters', 'quiescent', 'sijie', and 'zn'. "
+    rerun_help = "If the last run just crashed because you're testing things, "
+    rerun_help += "re-run in the last outputs directory."
+    rerun_help += "Do NOT do this for actual runs, to keep your results clean."
+        
         
     parser = argparse.ArgumentParser()
     parser.add_argument('--fields', dest = 'fields',
                         action = 'store', type = str, required = False,
                         help = fields_help, nargs='+', 
-                        default=['GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'])       
+                        default=['GS1', 'GS2', 'GS3', 'GS4', 'GS5', 
+                        'ERSPRIME', 'GN1', 'GN2', 'GN3', 'GN4', 'GN5', 'GN7'])       
     parser.add_argument('--steps', dest = 'do_steps',
                         action = 'store', type = int, required = False,
-                        help = do_steps_help,  nargs='+', default=['prep', 'interlace', 'extract', 'fit'])    
+                        help = do_steps_help,  nargs='+', 
+                        default=['prep', 'model', 'fit'])    
     parser.add_argument('--mlim', dest = 'mag_lim',
                         action = 'store', required = False,
                         help = mag_lim_help, default=25)
     parser.add_argument('--ref', dest = 'ref_filter',
                         action = 'store', type = str, required = False,
                         help = ref_filter_help,  default='F105W')
-    parser.add_argument('--cats', dest = 'cats',
+    parser.add_argument('--rerun', dest = 'rerun',
                         action = 'store', type = str, required = False,
-                        help = cats_help, nargs = '+', default='full')
+                        help = rerun_help,  default='False')
 
     args = parser.parse_args()
      
@@ -422,14 +554,22 @@ if __name__=='__main__':
     do_steps = args.do_steps
     mag_lim = args.mag_lim
     ref_filter = args.ref_filter
-    cat_names = args.cats
+    rerun = tobool(args.rerun)
+
+    if rerun:
+        PATH_OUTPUTS_TIMESTAMP = retrieve_latest_outputs(path_outputs=PATH_OUTPUTS)
+    else:
+        # Create the output directory
+        PATH_OUTPUTS_TIMESTAMP = store_outputs(path_outputs=PATH_OUTPUTS, 
+           store_type='')
 
     # Setup logging to save in the output directory
-    setup_logging(__file__, path_logs=PATH_OUTPUTS_TIMESTAMP)
+    setup_logging(__file__, path_logs=PATH_OUTPUTS_TIMESTAMP, stdout=True)
 
     #meta_record_imports(__file__, print_or_log='print') #but how direct this to a log file?
+    logging.info("TEST")
 
     # Call the main pipeline function.
-    clear_grizli_pipeline(fields=['GN2'], ref_filter='F105W', do_steps=['interlace'])
-
+    clear_grizli_pipeline(fields=['GN2'], ref_filter='F105W', mag_lim=25, 
+        do_steps=['model'])
 
