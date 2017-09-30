@@ -29,6 +29,7 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+imoprt pickle
 import shutil
 import time
 
@@ -253,7 +254,7 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
 #-------------------------------------------------------------------------------
 
 @log_metadata
-def model(visits, fields=[], ref_filter='', use_prep_path='.'):
+def model(visits, field='', ref_filter='', use_prep_path='.', load_only=False):
     """ Model the contamination.
 
     Parameters
@@ -276,80 +277,75 @@ def model(visits, fields=[], ref_filter='', use_prep_path='.'):
 
 
     """
-    grp_dict = {}
 
-    for field in fields:
+    grism_files = []
+    all_flt_files = []
+    for i in range(len(visits)):
+        # e.g., visits[i]['product'] = 'gn2-cxt-51-345.0-g102'  
+        print(visits[i]['product'])
+        field_in_contest = visits[i]['product'].split('-')[0].upper()
+        print(field_in_contest)   
+        if '-g1' in visits[i]['product']:
+            # Only add to list the grism files IF they are among the specified
+            # fields
+            if field_in_contest in overlapping_fields[field] or \
+                field_in_contest == field:
+                grism_files.extend(visits[i]['files'])
+                all_flt_files.extend(visits[i]['files'])
+        elif '-f1' in visits[i]['product']:
+            if field_in_contest in overlapping_fields[field] or \
+                field_in_contest == field:
+                all_flt_files.extend(visits[i]['files'])
 
-        grism_files = []
-        all_flt_files = []
-        for i in range(len(visits)):
-            # e.g., visits[i]['product'] = 'gn2-cxt-51-345.0-g102'  
-            print(visits[i]['product'])
-            field_in_contest = visits[i]['product'].split('-')[0].upper()
-            print(field_in_contest)   
-            if '-g1' in visits[i]['product']:
-                # Only add to list the grism files IF they are among the specified
-                # fields
-                if field_in_contest in overlapping_fields[field] or \
-                    field_in_contest == field:
-                    grism_files.extend(visits[i]['files'])
-                    all_flt_files.extend(visits[i]['files'])
-            elif '-f1' in visits[i]['product']:
-                if field_in_contest in overlapping_fields[field] or \
-                    field_in_contest == field:
-                    all_flt_files.extend(visits[i]['files'])
+    p = Pointing(field=field, ref_filter=ref_filter)
+    
+    # If modeling on a later run than when generating prep step files,
+    # copy the pre-processed FLTs to the current time-stamp directory.
+    # Brammer says only *FLTs produced by prep are needed, since for CLEAR
+    # we are providing the ref_file, seg_file, and catalog.
 
-        p = Pointing(field=field, ref_filter=ref_filter)
-        
-        # If modeling on a later run than when generating prep step files,
-        # copy the pre-processed FLTs to the current time-stamp directory.
-        # Brammer says only *FLTs produced by prep are needed, since for CLEAR
-        # we are providing the ref_file, seg_file, and catalog.
+    if use_prep_path != '.':
+        all_flt_files = [os.path.join(use_prep_path, flt) for flt in all_flt_files]
+        # Copy only the FLT files for the given field.
+        for flt in all_flt_files:
+            # assuming have cd'd into the outputs location
+            logging.info("Copying {} from {} to {}"\
+                .format(flt, use_prep_path, PATH_OUTPUTS_TIMESTAMP))
+            shutil.copy(flt, '.')
 
-        if use_prep_path != '.':
-            all_flt_files = [os.path.join(use_prep_path, flt) for flt in all_flt_files]
-            # Copy only the FLT files for the given field.
-            for flt in all_flt_files:
-                # assuming have cd'd into the outputs location
-                logging.info("Copying {} from {} to {}"\
-                    .format(flt, use_prep_path, PATH_OUTPUTS_TIMESTAMP))
-                shutil.copy(flt, '.')
-
-            # Create a readme listing origin of the prep files
-            with open('README.txt', 'w') as readme:
-                readme.write('{}\n'.format(time.ctime()))
-                readme.write('FLT files copied from {}\n'.format(use_prep_path))
+        # Create a readme listing origin of the prep files
+        with open('README.txt', 'w') as readme:
+            readme.write('{}\n'.format(time.ctime()))
+            readme.write('FLT files copied from {}\n'.format(use_prep_path))
 
 
-        # Do modeling
-        logging.info(" ")
-        logging.info("GroupFLT on field {}".format(field))
-        grp = GroupFLT(grism_files=grism_files, direct_files=[], 
-                  ref_file=os.path.join(PATH_REF, p.ref_image),
-                  seg_file=os.path.join(PATH_REF, p.seg_map),
-                  catalog=os.path.join(PATH_REF, p.catalog),
-                  pad=p.pad,
-                  cpu_count=8)
+    # Do modeling
+    logging.info(" ")
+    logging.info("GroupFLT on field {}".format(field))
+    grp = GroupFLT(grism_files=grism_files, direct_files=[], 
+              ref_file=os.path.join(PATH_REF, p.ref_image),
+              seg_file=os.path.join(PATH_REF, p.seg_map),
+              catalog=os.path.join(PATH_REF, p.catalog),
+              pad=p.pad,
+              cpu_count=8)
 
+    if not load_only:
         grp.compute_full_model(mag_limit=26)  # mag limit for contam model
         grp.refine_list(poly_order=2, mag_limits=[16, 24])
 
-        # how should I inspect these?
-        #flt_residuals(grp)
+        # Save flt - model as PNGs.
+        flt_residuals(grp)
 
         # Save grp.
         grp.save_full_data()
 
-        # Add to dictionary.
-        grp_dict[field] = grp
-
-    return grp_dict
+    return grp
         
 
 #-------------------------------------------------------------------------------
 
 @log_metadata
-def fit(grp=None, mag_lim=35, use_model_path='.'):
+def fit(field='', mag_lim=35, use_model_path='.'):
     """
     Extract, stack, and fit (z and em lines).
 
@@ -365,81 +361,90 @@ def fit(grp=None, mag_lim=35, use_model_path='.'):
     [do I really want the stacking and fitting to be in same function?]
 
     """
-    # if grp == None, reload grp?
+    #if use_model_path != '.':
+    #   copy stuff?
+
     # don't need a new timestamp dir? Because always will be copying Extractions and
     # fits to the Extractions directory? (and finals to RELEASE?)
+
+    # Load templates with combined emission line complexes for the redshift fit 
+    # (don't allow infinite freedom) of the line ratios / fluxes
+    templ0 = grizli.utils.load_templates(fwhm=1200, line_complexes=True, stars=False, 
+                                         full_line_list=None,  continuum_list=None, 
+                                         fsps_templates=True)
+
+    # Load individual line templates for fitting the line fluxes
+    templ1 = grizli.utils.load_templates(fwhm=1200, line_complexes=False, stars=False, 
+                                         full_line_list=None, continuum_list=None, 
+                                         fsps_templates=True)
 
     for id, mag in zip(np.array(grp.catalog['NUMBER']), np.array(grp.catalog['MAG_AUTO'])):
         if mag <= mag_lim:
             print(id, mag)
             # Extract the 2D traces
             beams = grp.get_beams(id, size=80) #size??
-            mb = MultiBeam(beams, fcontam=1, group='')  # make group be pointing
+            if beams != []:
+                mb = MultiBeam(beams, fcontam=1, group=field)
 
-            # Run the redshift fit and generate the emission line map
-            #pzfit_def, pspec2_def, pline_def = get_redshift_fit_defaults()
-            #out = mb.run_full_diagnostics(pzfit=pzfit_def, pspec2=pspec2_def, 
-            #    pline=pline_def, GroupFLT=grp, prior=None)
+                # Save a FITS file with the 2D cutouts (beams) from the individual exposures
+                mb.write_master_fits()
 
-            #fit, fig, fig2, hdu2, hdu_line = out
+                # Fit polynomial model for initial continuum subtraction
+                wave = np.linspace(2000,2.5e4,100)
+                poly_templates = grizli.utils.polynomial_templates(wave, order=7)
+                pfit = mb.template_at_z(
+                    z=0, 
+                    templates=poly_templates, 
+                    fit_background=True, 
+                    fitter='lstsq', 
+                    get_uncertainties=2)
 
-            # Save a FITS file with the 2D cutouts (beams) from the individual exposures
-            mb.write_master_fits()
+                # Drizzle grisms / PAs
+                hdu, fig = mb.drizzle_grisms_and_PAs(
+                    fcontam=0.2, 
+                    flambda=False, 
+                    kernel='point', 
+                    size=32, 
+                    zfit=pfit)
 
-            # Fit polynomial model for initial continuum subtraction
-            wave = np.linspace(2000,2.5e4,100)
-            poly_templates = grizli.utils.polynomial_templates(wave, order=7)
-            pfit = mb.template_at_z(
-                z=0, 
-                templates=poly_templates, 
-                fit_background=True, 
-                fitter='lstsq', 
-                get_uncertainties=2)
+                # Save drizzled ("stacked") 2D trace as PNG and FITS
+                fig.savefig('{0}_{1:05d}.stack.png'.format(field, id))
+                hdu.writeto('{0}_{1:05d}.stack.fits'.format(field, id), clobber=True)
 
-            # Drizzle grisms / PAs
-            hdu, fig = mb.drizzle_grisms_and_PAs(
-                fcontam=0.2, 
-                flambda=False, 
-                kernel='point', 
-                size=32, 
-                zfit=pfit)
+                # Fit the emission lines and redshifts
+                #[this produces a file?]
+                out = grizli.fitting.run_all(
+                    id, 
+                    t0=templ0, 
+                    t1=templ1, 
+                    fwhm=1200, 
+                    zr=[0.5, 2.3], 
+                    dz=[0.004, 0.0005], 
+                    fitter='nnls', 
+                    group_name=field,
+                    prior=None, 
+                    fcontam=0.,
+                    pline=pline, 
+                    mask_sn_limit=7, 
+                    fit_beams=True, 
+                    fit_stacks=False,  
+                    root=field+'_',
+                    fit_trace_shift=False, 
+                    verbose=True, 
+                    phot=None, 
+                    scale_photometry=False, 
+                    show_beams=True)
 
-            # Save drizzled ("stacked") 2D trace as PNG and FITS
-            fig.savefig('{0}_{1:05d}.stack.png'.format(target, id))
-            hdu.writeto('{0}_{1:05d}.stack.fits'.format(target, id), clobber=True)
+                mb, st, fit, tfit, line_hdu = out
 
-
-            # Fit the emission lines and redshifts
-            out = grizli.fitting.run_all(
-                id, 
-                t0=templ0, 
-                t1=templ1, 
-                fwhm=1200, 
-                zr=[0.5, 2.3], 
-                dz=[0.004, 0.0005], 
-                fitter='nnls', 
-                group_name='', #make field
-                prior=None, 
-                fcontam=0.,
-                pline=pline, 
-                mask_sn_limit=7, 
-                fit_beams=True, 
-                fit_stacks=False,  
-                root=target+'_', #change this
-                fit_trace_shift=False, 
-                verbose=True, 
-                phot=None, 
-                scale_photometry=False, 
-                show_beams=True)
-
-            mb, st, fit, tfit, line_hdu = out
+                # make plots and save
 
 #-------------------------------------------------------------------------------
 
 @log_info
 @log_metadata
 def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
-    do_steps=['prep', 'model', 'fit']):
+    do_steps=['prep', 'model', 'fit'], use_prep_path='.', use_model_path='.'):
     """ Main wrapper on pre-processing, modeling and extracting/fitting steps.
 
     Parameters
@@ -455,6 +460,11 @@ def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
         The pipeline steps to run.     
 
     """
+    if use_prep_path != '.':
+        use_prep_path = os.path.join(PATH_OUTPUTS, use_prep_path)
+    if use_model_path != '.':
+        use_model_path = os.path.join(PATH_OUTPUTS, use_model_path)
+
     # cd into outputs directory, as running grizli requires
     os.chdir(PATH_OUTPUTS_TIMESTAMP)
     #os.chdir(os.path.join(PATH_OUTPUTS, '2017.09.25.14.26.28'))
@@ -470,29 +480,31 @@ def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
         logging.info("...")
         prep(visits=visits, ref_filt='F105W', ref_grism='G102')
 
-    # Do the modeling; need have option which outputs subdir to use? (nominally, all will be same)
-    if 'model' in do_steps:
-        logging.info(" ")
-        logging.info("PERFORMING MODELING STEP")
-        logging.info("...")
-        if 'prep' in do_steps:
-            use_prep_path='.'
-        #grp_dict = model(visits=visits, fields=fields, ref_filter=ref_filter, 
-        #    mag_lim=mag_lim, use_prep_path=os.path.join(PATH_OUTPUTS, '2017.09.22.15.30.29'))
-        # make this return a directory path?
-        #print(grp_dict)
-
-    # Do the fitting; need have option which outputs subdir to use? 
-    if 'fit' in do_steps:
-        logging.info(" ")
-        logging.info("PERFORMING EXTRACTING/STACKING/FITTING STEP")
-        logging.info("...")
+    for field in fields:
+        # Do the modeling; need have option which outputs subdir to use? (nominally, all will be same)
         if 'model' in do_steps:
-           use_model_path = '.'
-        #   grp != None
-        #fit()
-        
+            logging.info(" ")
+            logging.info("PERFORMING MODELING STEP FOR FIELD {}"\
+                .format(field.upper()))
+            logging.info("...")
+            grp = model(visits=visits, field=field, ref_filter=ref_filter, 
+                mag_lim=mag_lim, use_prep_path=use_prep_path)
+            # make this return a directory path?
+            #print(grp)
 
+        # Do the fitting; need have option which outputs subdir to use? 
+        if 'fit' in do_steps:
+            logging.info(" ")
+            logging.info("PERFORMING EXTRACTING/STACKING/FITTING STEP FOR FIELD {}"\
+                .format(field.upper()))
+            logging.info("...")
+            if 'model' not in do_steps:
+                # fetch the grp
+                # search in use_model_path for grp file?
+                #grp = model(visits=visits, field=field, ref_filter=ref_filter, 
+                #    mag_lim=mag_lim, use_prep_path='.', load_only=True)
+            #fit()
+        
 
 #-------------------------------------------------------------------------------
 
@@ -517,8 +529,9 @@ def parse_args():
     rerun_help = "If the last run just crashed because you're testing things, "
     rerun_help += "re-run in the last outputs directory."
     rerun_help += "Do NOT do this for actual runs, to keep your results clean."
-        
-        
+    prepdir_help = "Timestamp directory containing pre-processed files. '.' by default."
+    modeldir_help = "Timestamp directory containing model files. '.' by default."
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('--fields', dest = 'fields',
                         action = 'store', type = str, required = False,
@@ -538,6 +551,12 @@ def parse_args():
     parser.add_argument('--rerun', dest = 'rerun',
                         action = 'store', type = str, required = False,
                         help = rerun_help,  default='False')
+    parser.add_argument('--prepdir', dest = 'prepdir',
+                        action = 'store', type = str, required = False,
+                        help = prepdir_help,  default='.')
+    parser.add_argument('--modeldir', dest = 'modeldir',
+                        action = 'store', type = str, required = False,
+                        help = modeldir_help,  default='.')
 
     args = parser.parse_args()
      
@@ -555,6 +574,8 @@ if __name__=='__main__':
     mag_lim = args.mag_lim
     ref_filter = args.ref_filter
     rerun = tobool(args.rerun)
+    prepdir = args.prepdir
+    modeldir = args.modeldir
 
     if rerun:
         PATH_OUTPUTS_TIMESTAMP = retrieve_latest_outputs(path_outputs=PATH_OUTPUTS)
@@ -567,9 +588,8 @@ if __name__=='__main__':
     setup_logging(__file__, path_logs=PATH_OUTPUTS_TIMESTAMP, stdout=True)
 
     #meta_record_imports(__file__, print_or_log='print') #but how direct this to a log file?
-    logging.info("TEST")
 
     # Call the main pipeline function.
     clear_grizli_pipeline(fields=['GN2'], ref_filter='F105W', mag_lim=25, 
-        do_steps=['model'])
+        do_steps=['model'], prepdir='2017.09.22.15.30.29', modeldir=modeldir)
 
