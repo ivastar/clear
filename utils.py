@@ -58,10 +58,10 @@ def make_timestamp_dir(dest):
 
 #-------------------------------------------------------------------------------
 
-def store_outputs(path_outputs, store_type):
+def store_outputs(path_outputs, store_type=''):
     """
     This does not deal with sorting extractions. Only the output from 
-    prep and interlacing steps. 
+    prep and modeling steps. 
     It should be easy to go into this directory and recreate the needed
     extractions, functioning just as outputs always does, only this is
     a frozen version of outputs that cannot be overwritten.
@@ -70,7 +70,7 @@ def store_outputs(path_outputs, store_type):
     Parameters
     ----------
     store_type : string
-        Either 'prep' or 'inter', to be appended to directory name.
+        Either 'prep' or 'model', to be appended to directory name.
 
     Returns
     -------
@@ -88,14 +88,14 @@ def store_outputs(path_outputs, store_type):
 
 #-------------------------------------------------------------------------------
 
-def retrieve_latest_outputs(path_outputs, store_type):
+def retrieve_latest_outputs(path_outputs, store_type=''):
     """
     Returns path+name to the most recent output sub-directory for 'store_type'.
 
     Parameters
     ----------
     store_type : string
-        Either 'prep' or 'inter', appended to directory name.
+        Either 'prep' or 'model', appended to directory name.
 
     Returns
     -------
@@ -105,14 +105,37 @@ def retrieve_latest_outputs(path_outputs, store_type):
     # creation time.
     directories = glob.glob(os.path.join(path_outputs, '*{}'.format(store_type)))
     max_birthday = 0
+    latest_dir = ''
     for directory in directories:
         birthday = os.path.getctime(directory)
         if birthday > max_birthday:
             max_birthday = birthday
+            latest_dir = directory
 
-    return max_birthday
+    return latest_dir
 
 
 
 
+def tobool(ans):
+    """Takes "Yes"/"No" or "True"/"False" and returns boolean True or False.
+
+    Parameters
+    ----------
+    ans : string
+        "Yes"/"No" or "True"/"False".
+    Returns
+    -------
+    boo : {True, False}
+    """
+    ans = ans.lower()
+
+    if 'y' in ans or 't' in ans:
+        boo = True
+    elif 'n' in ans or 'f' in ans:
+        boo = False
+    else:
+        boo = None
+
+    return boo
 

@@ -6,6 +6,34 @@ Author:
 
     C.M. Gosmeyer, Aug. 2017
 
+Use:
+
+    (give example command line runs)
+
+Dependencies:
+
+    * cgosmeyer's fork of grizli: https://github.com/cgosmeyer/grizli
+    * record_imports: https://github.com/cgosmeyer/record_imports
+    [[is this still true or is my loggin in pipeline itself?]]
+    * analysis_tools [[really should try to do this the astropy way, though 
+    it might kill me]]
+
+Inputs:
+    
+    If starting from the very first step, all input FLTs are assumed to be
+    in the location of the 'RAW 'directory you supply in `set_paths.py`.
+
+    #how can I supply grizli with the correct persistence path? 
+
+Outputs:
+
+    A time-stamp directory 'yyyy.mm.dd.hh.mm.ss' will be created 
+    where you set the 'outputs' directory in `set_paths.py`. This directory
+    will contain all pipeline-generated FITS, PNGs, DATs, and so forth. 
+    In these time-stamp directories will also be generated log files
+    with the name of this script plus the time it was first generated,
+    'clear_grizli_pipeline.py_yyyy-mm-dd-hh-mm'.
+
 Notes:
 
     * This loops over CLEAR 'fields' (GN1, GS1, ERSPRIME, etc).
@@ -29,7 +57,6 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-imoprt pickle
 import shutil
 import time
 
@@ -39,30 +66,37 @@ from set_paths import paths
 from utils import store_outputs, retrieve_latest_outputs, tobool
 from clear_inspection_tools import flt_residuals
 
-# My grizli fork and other personal packages
+# cgosmeyer's grizli fork and other personal packages
 from analysis_tools.tables import bypass_table 
 from grizli.prep import process_direct_grism_visit
 from grizli.multifit import GroupFLT, MultiBeam, get_redshift_fit_defaults
-from record_imports.record_imports import meta_record_imports
+#from record_imports.record_imports import meta_record_imports
 from record_imports.log import setup_logging, log_info, log_metadata
 
 # Set global paths.
-PATH_RAW = paths['path_to_RAW']
-PATH_OUTPUTS = paths['path_to_outputs']
+PATH_RAW = '/astro/clear/cgosmeyer/test_data/RAW' #paths['path_to_RAW']
+PATH_OUTPUTS = '/astro/clear/cgosmeyer/test_data/outputs' #paths['path_to_outputs']
 PATH_REF = os.path.join(paths['path_to_ref_files'], 'REF')
+PATH_EXTRACTIONS = paths['path_to_Extractions']
+PATH_PERSISTENCE = paths['path_to_Persistence'] #how get this to grizli?
 
 global PATH_OUTPUTS_TIMESTAMP
 
-# should overlapping_fields and pointing be put in their own module?
+# For Goods-N pointings, overlaps are from proposal 13420. 
+# For Goods-S (ERPSPRIME only), overlaps are from proposal 11359, visits 21 and 23.
 overlapping_fields = {'GN1':['GDN20'],
                       'GN2':['GDN8', 'GDN12', 'GDN21', 'GDN25'],
                       'GN3':['GDN18', 'GDN19', 'GDN22', 'GDN23'],
                       'GN4':['GDN21', 'GDN22', 'GDN25', 'GDN26'],
                       'GN5':['GDN17', 'GDN18'],
-                      'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11']}
+                      'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11'],
+                      'ERSPRIME':['WFC3-ERSII-G01']}
 
 class Pointing():
     """ Generalization of GN1, GS1, ERSPRIME, etc
+
+    To change field-dependent catalog, seg map, ref image, and padding
+    only need to change them here.
     """
     def __init__(self, field, ref_filter):
         if 'N' in field.upper():
@@ -109,8 +143,7 @@ def find_files(fields):
         lists of FLT files.
 
     """
-    files = glob.glob(os.path.join(paths['path_to_RAW'], '*flt.fits')) \
-        + glob.glob(os.path.join(paths['path_to_RAW_3DHST'], '*flt.fits'))
+    files = glob.glob(os.path.join(PATH_RAW, '*flt.fits'))
     info = grizli.utils.get_flt_info(files)
     # 'info' is an astropy table.
 
@@ -127,7 +160,7 @@ def find_files(fields):
             new_info_list.append([info_dict[key][row] for key in info_dict.keys() if key != 'meta'])
         # Now, if one of the fields is GOODS-N, need be sure all the Barro programs
         # are also retained. 
-        for field in [field for field in fields if 'N' in field]:
+        for field in [field for field in fields if 'N' in field or 'ERSPRIME' in field]:
             if info_dict['TARGNAME'][row] in overlapping_fields[field]:
                 new_info_list.append([info_dict[key][row] for key in info_dict.keys() if key != 'meta'])
                 # Break so the Barro programs are added only once.
@@ -136,7 +169,8 @@ def find_files(fields):
     # Convert 'info' back into a table
     # I couldn't simply do dtype=info.dtype, so just hard code it
     new_info_tab = Table(np.array(new_info_list), names=info.colnames, meta=info.meta, 
-        dtype=['S18', 'S5', 'S8', 'S10', 'S8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8'])
+        dtype=['S18', 'S5', 'S8', 'S10', 'S8', '<f8', '<f8', '<f8', '<f8', 
+        '<f8', '<f8', '<f8'])
 
     visits, filters = grizli.utils.parse_flt_files(info=new_info_tab, uniquename=True)
 
@@ -148,15 +182,18 @@ def find_files(fields):
 @log_metadata
 def prep(visits, ref_filter='F105W', ref_grism='G102'):
     """
-    This is akin to `align_all.py`. It copies the FLTs from 'RAW/' and 
+    You should have previewed all the FLTs for anomalies prior to this step
+    and appropriately removed reads, created masks, removed bad observations, etc.
+
+    This function is akin to `align_all.py`. It copies the FLTs from 'RAW/' and 
     performs background subtraction and flat-fielding, extracts visit-level
     catalogs and seg maps from direct images, and produces aligned, background-
     subtracted FLTs and drizzled mosaics of both direct and grism images.
 
     Parameters
     ----------
-    visits :
-
+    visits : OrderedDict
+        Keys of 'files' and 'products'; values of list of FLT files and product name.
     ref_filter : string
         The reference image's filter.
     ref_grism : string
@@ -232,7 +269,8 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
                 field = product2.split('-')[0]
                 if basename1 == basename2 and ref_grism.lower() in filt2.lower():
                     # Point to correct, field-dependent radec catalog
-                    print("Matched direct to grism products: {} {}".format(product1, product2))
+                    print("Matched direct to grism products: {} {}"\
+                        .format(product1, product2))
                     p = Pointing(field=field, ref_filter=ref_filter)
                     radec_catalog = p.radec_catalog
                     print("Using radec catalog: {}".format(radec_catalog))
@@ -248,32 +286,46 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
                         path_raw=PATH_RAW,
                         align_mag_limits=[14,23])
 
-    # need make some inspection tools
+    # need make some inspection tools?
 
 
 #-------------------------------------------------------------------------------
 
 @log_metadata
-def model(visits, field='', ref_filter='', use_prep_path='.', load_only=False):
+def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.'):
+    #, load_only=False):
     """ Model the contamination.
 
     Parameters
     ----------
-    visits :
-
-    fields : list of strings
-        Generally will be the same as in the prep step, unless for some reason
-        you wish to run over a subset.
+    visits : OrderedDict
+        Keys of 'files' and 'products'; values of list of FLT files and product name.
+    field : string
+        The pointing, technically, 'GN1', 'GS1', etc.
     ref_filter : string
         The reference image's filter.
     use_prep_path : string
         Path to the pre-processed files. By default the working directory.
+    use_model_path : string
+        Change this ONLY if re-loading already-created GroupFLTs. These GroupFLTs
+        will then be found from this path. 
+        (The idea of 're-loading' if you are alread in '.' makes no sense if
+        working from time-stamped directories that are created for each seperate
+        run of the pipeline.)
+    #load_only : {True, False}
+    #    Set to True if only want to load a previous pickle of grp for field.
+
+    Returns
+    -------
+    grp : grizli.multifit.GroupFLT
+
 
     Outputs
     -------
     * icat08hiq_flt.01.wcs.fits
     * icat08hiq.01.GrismFLT.fits
     * icat08hiq.01.GrismFLT.pkl - contains what? 
+    * icat08hiq_residuals.png
 
 
     """
@@ -321,19 +373,27 @@ def model(visits, field='', ref_filter='', use_prep_path='.', load_only=False):
 
     # Do modeling
     logging.info(" ")
-    logging.info("GroupFLT on field {}".format(field))
-    grp = GroupFLT(grism_files=grism_files, direct_files=[], 
-              ref_file=os.path.join(PATH_REF, p.ref_image),
-              seg_file=os.path.join(PATH_REF, p.seg_map),
-              catalog=os.path.join(PATH_REF, p.catalog),
-              pad=p.pad,
-              cpu_count=8)
+    if use_model_path != '.':
+        os.chdir(use_model_path)
+        logging.info("Loading GroupFLTs on field {}".format(field))
+    else:
+        logging.info("Creating GroupFLTs on field {}".format(field))
 
-    if not load_only:
+    grp = GroupFLT(
+        grism_files=grism_files, 
+        direct_files=[], 
+        ref_file=os.path.join(PATH_REF, p.ref_image),
+        seg_file=os.path.join(PATH_REF, p.seg_map),
+        catalog=os.path.join(PATH_REF, p.catalog),
+        pad=p.pad,
+        cpu_count=8)
+
+    #if not load_only:
+    if use_model_path != '.':
         grp.compute_full_model(mag_limit=26)  # mag limit for contam model
         grp.refine_list(poly_order=2, mag_limits=[16, 24])
 
-        # Save flt - model as PNGs.
+        # Save flts - models as PNGs.
         flt_residuals(grp)
 
         # Save grp.
@@ -345,25 +405,27 @@ def model(visits, field='', ref_filter='', use_prep_path='.', load_only=False):
 #-------------------------------------------------------------------------------
 
 @log_metadata
-def fit(field='', mag_lim=35, use_model_path='.'):
+def fit(grp, field='', mag_lim=35, release=False):
     """
     Extract, stack, and fit (z and em lines).
 
     Parameters
     ----------
+    grp : grizli.multifit.GroupFLT
+
+    field : string
+        The pointing, technically, 'GN1', 'GS1', etc.
     mag_lim : int
         The magnitude limit of sources to extract and fit.
         By default '35', unrealistically high so to include everything.
+    release : {True, False}
 
-    [will this create 1D and 2D traces for individual extractions, as well
-    as the stack?]
+    Outputs
+    -------
 
     [do I really want the stacking and fitting to be in same function?]
 
     """
-    #if use_model_path != '.':
-    #   copy stuff?
-
     # don't need a new timestamp dir? Because always will be copying Extractions and
     # fits to the Extractions directory? (and finals to RELEASE?)
 
@@ -391,28 +453,37 @@ def fit(field='', mag_lim=35, use_model_path='.'):
 
                 # Fit polynomial model for initial continuum subtraction
                 wave = np.linspace(2000,2.5e4,100)
-                poly_templates = grizli.utils.polynomial_templates(wave, order=7)
+                poly_templates = grizli.utils.polynomial_templates(
+                    wave=wave, 
+                    order=7,
+                    line=False)
                 pfit = mb.template_at_z(
                     z=0, 
                     templates=poly_templates, 
                     fit_background=True, 
                     fitter='lstsq', 
+                    fwhm=1400, 
                     get_uncertainties=2)
 
                 # Drizzle grisms / PAs
                 hdu, fig = mb.drizzle_grisms_and_PAs(
+                    size=32, 
                     fcontam=0.2, 
                     flambda=False, 
+                    scale=1, 
+                    pixfrac=0.5, 
                     kernel='point', 
-                    size=32, 
-                    zfit=pfit)
+                    make_figure=True, 
+                    usewcs=False, 
+                    zfit=pfit,
+                    diff=True)
 
                 # Save drizzled ("stacked") 2D trace as PNG and FITS
                 fig.savefig('{0}_{1:05d}.stack.png'.format(field, id))
                 hdu.writeto('{0}_{1:05d}.stack.fits'.format(field, id), clobber=True)
 
                 # Fit the emission lines and redshifts
-                #[this produces a file?]
+                # This produces field_id.full.fits and field_id.full.png
                 out = grizli.fitting.run_all(
                     id, 
                     t0=templ0, 
@@ -420,24 +491,37 @@ def fit(field='', mag_lim=35, use_model_path='.'):
                     fwhm=1200, 
                     zr=[0.5, 2.3], 
                     dz=[0.004, 0.0005], 
-                    fitter='nnls', 
+                    fitter='nnls',
                     group_name=field,
+                    fit_stacks=False, 
                     prior=None, 
                     fcontam=0.,
                     pline=pline, 
                     mask_sn_limit=7, 
+                    fit_only_beams=False,
                     fit_beams=True, 
-                    fit_stacks=False,  
                     root=field+'_',
                     fit_trace_shift=False, 
-                    verbose=True, 
                     phot=None, 
+                    verbose=True, 
                     scale_photometry=False, 
                     show_beams=True)
 
                 mb, st, fit, tfit, line_hdu = out
 
-                # make plots and save
+                # do we need more plots?
+
+                # sort into Extractions directory? have a special parameter for release?
+                #if release:
+                #   ...
+
+
+#-------------------------------------------------------------------------------
+
+def sort_extractions():
+    """
+    """
+
 
 #-------------------------------------------------------------------------------
 
@@ -457,7 +541,11 @@ def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
     mag_lim : int
         The magnitude limit of sources to extract and fit.
     do_steps : list of strings
-        The pipeline steps to run.     
+        The pipeline steps to run.    
+    use_prep_path : string
+        Timestamp directory containing pre-processed files.
+    use_model_path : string 
+        Timestamp directory containing model files.
 
     """
     if use_prep_path != '.':
@@ -467,7 +555,6 @@ def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
 
     # cd into outputs directory, as running grizli requires
     os.chdir(PATH_OUTPUTS_TIMESTAMP)
-    #os.chdir(os.path.join(PATH_OUTPUTS, '2017.09.25.14.26.28'))
     logging.info("cd into {}".format(PATH_OUTPUTS_TIMESTAMP))
 
     # Find the files in RAW
@@ -490,7 +577,6 @@ def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
             grp = model(visits=visits, field=field, ref_filter=ref_filter, 
                 mag_lim=mag_lim, use_prep_path=use_prep_path)
             # make this return a directory path?
-            #print(grp)
 
         # Do the fitting; need have option which outputs subdir to use? 
         if 'fit' in do_steps:
@@ -499,11 +585,12 @@ def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
                 .format(field.upper()))
             logging.info("...")
             if 'model' not in do_steps:
-                # fetch the grp
-                # search in use_model_path for grp file?
-                #grp = model(visits=visits, field=field, ref_filter=ref_filter, 
-                #    mag_lim=mag_lim, use_prep_path='.', load_only=True)
-            #fit()
+                # Presumably models were already done, so fetch `grp`
+                # from `GrismFLT` files for given field. 
+                # Supply `use_model_path` so it knows from where to load GrismFLTs.
+                grp = model(visits=visits, field=field, ref_filter=ref_filter, 
+                    mag_lim=mag_lim, use_prep_path='.', use_model_path=use_model_path) #, load_only=True)
+            fit(grp, field=field, mag_lim=mag_lim, release=False)
         
 
 #-------------------------------------------------------------------------------
@@ -531,6 +618,7 @@ def parse_args():
     rerun_help += "Do NOT do this for actual runs, to keep your results clean."
     prepdir_help = "Timestamp directory containing pre-processed files. '.' by default."
     modeldir_help = "Timestamp directory containing model files. '.' by default."
+    release_help = "Set to True if extractions and fits are to be placed in a release."
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--fields', dest = 'fields',
@@ -557,6 +645,9 @@ def parse_args():
     parser.add_argument('--modeldir', dest = 'modeldir',
                         action = 'store', type = str, required = False,
                         help = modeldir_help,  default='.')
+    parser.add_argument('--release', dest = 'release',
+                        action = 'store', type = str, required = False,
+                        help = release_help,  default=False)
 
     args = parser.parse_args()
      
@@ -576,6 +667,7 @@ if __name__=='__main__':
     rerun = tobool(args.rerun)
     prepdir = args.prepdir
     modeldir = args.modeldir
+    release = args.release # Not implemented
 
     if rerun:
         PATH_OUTPUTS_TIMESTAMP = retrieve_latest_outputs(path_outputs=PATH_OUTPUTS)
@@ -590,6 +682,14 @@ if __name__=='__main__':
     #meta_record_imports(__file__, print_or_log='print') #but how direct this to a log file?
 
     # Call the main pipeline function.
+
+    # If running the full pipeline, prep to fitting (especially if running a 
+    # given dataset through for the first time!), both prepdir and modeldir
+    # should be '.'; it's only when testing or when you want to re-run specific 
+    # steps that you might change these to specific time-stamp directories
+    # in 'outputs/'.
+
     clear_grizli_pipeline(fields=['GN2'], ref_filter='F105W', mag_lim=25, 
-        do_steps=['model'], prepdir='2017.09.22.15.30.29', modeldir=modeldir)
+        do_steps=['model'], prepdir=prepdir, modeldir=modeldir)
+    #prepdir='2017.09.22.15.30.29'
 

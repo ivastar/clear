@@ -24,10 +24,12 @@ Outputs:
 
 """
 
-paths = {'path_to_outputs' : '/astro/clear/cgosmeyer/outputs/', \
-         'path_to_RAW' : '/astro/clear/cgosmeyer/RAW/', \
-         'path_to_ref_files' : '/astro/clear/cgosmeyer/ref_files/', \
-         'path_to_PREPARE' : '/astro/clear/cgosmeyer/PREPARE/', \
+paths = {'path_to_outputs' : '/astro/clear/cgosmeyer/outputs/',
+         'path_to_grizli_outputs' : '/astro/clear/cgosmeyer/GRIZLI/outputs/',
+         'path_to_RAW' : '/astro/clear/cgosmeyer/RAW/',
+         'path_to_RAW_3DHST' : '/astro/clear/cgosmeyer/RAW_3DHST/',
+         'path_to_ref_files' : '/astro/clear/cgosmeyer/ref_files/',
+         'path_to_PREPARE' : '/astro/clear/cgosmeyer/PREPARE/', 
          'path_to_software' : '/astro/clear/cgosmeyer/software/',
          'path_to_PERSIST' : '/astro/clear/cgosmeyer/PERSIST/',
          'path_to_Extractions' : '/astro/clear/cgosmeyer/Extractions/'}
