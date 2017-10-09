@@ -8,7 +8,37 @@ Author:
 
 Use:
 
-    (give example command line runs)
+    >>> python clear_grizli_pipeline.py 
+
+    --fields : (optional) By default all pointings. Or choose from
+        'GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 
+        'GN2', 'GN3', 'GN4', 'GN5', 'GN7'
+
+    --steps : (optional) By default all pipeline steps. Or choose from
+        'prep', 'model', 'fit'
+
+    --mlim : (optional) Magnitude limit of extractions. By default "25".
+
+    --ref : (optional) Reference filter. By default "F105W".
+
+    --rerun : (optional) Set to "True" if you want to re-run in the same outputs
+        directory because last run just crashed. Use only if testing things. 
+
+    --prepdir : (optional) Directory containing files from "prep" step.
+        By default, ".".
+
+    --modeldir : (optional) Directory containing files from "model" step.
+        By default, ".".
+
+    --release : NotImplemented
+
+
+Example:
+
+    >>> python clear_grizli_pipeline.py --steps 'fit' --fields 'GN2' 'GN3' --mlim 26
+
+    # Look for outputs in a sub-directory named for the date in time in the 
+    # directory you set to be the outputs directory in `set_paths.py`.
 
 Dependencies:
 
@@ -91,6 +121,7 @@ overlapping_fields = {'GN1':['GDN20'],
                       'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11'],
                       'ERSPRIME':['WFC3-ERSII-G01']}
 
+# could a collections.namedtuple be used here instead?
 class Pointing():
     """ Generalization of GN1, GS1, ERSPRIME, etc
 
@@ -120,6 +151,17 @@ class Pointing():
                 self.catalog = 'goodss-F105W-astrodrizzle-v4.3_drz_sub_plus.cat'
                 self.ref_image = 'goodss-F105W-astrodrizzle-v4.3_drz_sci.fits'
             
+
+# https://stackoverflow.com/questions/25027122/break-the-function-after-certain-time
+
+import signal
+
+class TimeoutException(Exception):   # Custom exception class
+    pass
+def timeout_handler(signum, frame):   # Custom signal handler
+    raise TimeoutException
+signal.signal(signal.SIGALRM, timeout_handler)
+
 
 #-------------------------------------------------------------------------------
 
@@ -430,14 +472,26 @@ def fit(grp, field='', mag_lim=35, release=False):
     #question: are these appropriate for clear?
     pline = {'kernel': 'point', 'pixfrac': 0.2, 'pixscale': 0.1, 'size': 8, 'wcs': None}
 
+    # ids that cause errors for reasons I do not know
+    bad_ids = [14784, # hangs after "First iteration: z_best="
+               15783, # hangs after "First iteration: z_best="
+               16229, # hangs after "First iteration: z_best="
+               16231,
+               16293] # hangs after "First iteration: z_best="
+
+    already_completed = glob.glob('*stack.png')
+    already_completed = [int(id.split('.stack.png')[0].split('_')[1]) for id in already_completed]
+
     # Loop over all ids, mag, and run extracting and fitting only on ids that
     # full under the magnitude limit. 
     for id, mag in zip(np.array(grp.catalog['NUMBER']), np.array(grp.catalog['MAG_AUTO'])):
-        if mag <= mag_lim:
+        if mag <= mag_lim and id not in already_completed:
             print(id, mag)
             # Extract the 2D traces
             beams = grp.get_beams(id, size=80) #size??
             if beams != []:
+                print("beams: ", beams)
+
                 logging.info("running MultiBeam on id: {}, mag: {}".format(id, mag))
                 mb = MultiBeam(beams, fcontam=1, group_name=field)
 
@@ -479,35 +533,44 @@ def fit(grp, field='', mag_lim=35, release=False):
                     fig.savefig('{0}_{1:05d}.stack.png'.format(field, id))
                     hdu.writeto('{0}_{1:05d}.stack.fits'.format(field, id), clobber=True)
 
+                    signal.alarm(5) 
                     # Fit the emission lines and redshifts
                     # This produces field_id.full.fits and field_id.full.png
-                    out = grizli.fitting.run_all(
-                        id, 
-                        t0=templ0, 
-                        t1=templ1, 
-                        fwhm=1200, 
-                        zr=[0.5, 2.3], 
-                        dz=[0.004, 0.0005], 
-                        fitter='nnls',
-                        group_name=field,
-                        fit_stacks=False, 
-                        prior=None, 
-                        fcontam=0.,
-                        pline=pline, 
-                        mask_sn_limit=7, 
-                        fit_only_beams=False,
-                        fit_beams=True, 
-                        root=field+'_',
-                        fit_trace_shift=False, 
-                        phot=None, 
-                        verbose=True, 
-                        scale_photometry=False, 
-                        show_beams=True)
+                    try:
+                        out = grizli.fitting.run_all(
+                            id, 
+                            t0=templ0, 
+                            t1=templ1, 
+                            fwhm=1200, 
+                            zr=[0.5, 2.3], 
+                            dz=[0.004, 0.0005], 
+                            fitter='nnls',
+                            group_name=field,
+                            fit_stacks=False, 
+                            prior=None, 
+                            fcontam=0.,
+                            pline=pline, 
+                            mask_sn_limit=7, 
+                            fit_only_beams=False,
+                            fit_beams=True, 
+                            root=field+'_',
+                            fit_trace_shift=False, 
+                            phot=None, 
+                            verbose=True, 
+                            scale_photometry=False, 
+                            show_beams=True)
 
-                    if out == None:
-                        logging.info("Redshift fit failed on id {}".format(id))
+                        if out == None:
+                            logging.info("Redshift fit failed on id {}".format(id))
+                        else:
+                            mb, st, fit, tfit, line_hdu = out
+
+                    except TimeoutException:
+                        logging.info("run_all timed out on id {}".format(id))
+                        continue
                     else:
-                        mb, st, fit, tfit, line_hdu = out
+                        # Reset alarm
+                        signal.alarm(0)
 
                     # do we need more plots?
 
