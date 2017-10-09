@@ -23,6 +23,7 @@ Use:
 
     --rerun : (optional) Set to "True" if you want to re-run in the same outputs
         directory because last run just crashed. Use only if testing things. 
+        Will cd into the most recent directory created in "outputs".
 
     --prepdir : (optional) Directory containing files from "prep" step.
         By default, ".".
@@ -35,10 +36,20 @@ Use:
 
 Example:
 
-    >>> python clear_grizli_pipeline.py --steps 'fit' --fields 'GN2' 'GN3' --mlim 26
+    # 1.
+    # Run pipeline with just "model" and "fit" steps, on pointings "GN2" and "GN3" down
+    # to magnitude limit 26.
+
+    >>> python clear_grizli_pipeline.py --steps 'model' 'fit' --fields 'GN2' 'GN3' --mlim 26
 
     # Look for outputs in a sub-directory named for the date in time in the 
     # directory you set to be the outputs directory in `set_paths.py`.
+
+    # 2.
+    # The pipline crashed in "fit" step, you fixed the bug, and want to re-run 
+    # from where you left off, in the same time-stamped directory. 
+
+    >>> python clear_grizli_pipeline.py --steps 'fit' --rerun 'True'
 
 Dependencies:
 
@@ -100,7 +111,7 @@ from analysis_tools.tables import bypass_table
 from grizli.prep import process_direct_grism_visit
 from grizli.multifit import GroupFLT, MultiBeam, get_redshift_fit_defaults
 #from record_imports.record_imports import meta_record_imports
-from record_imports.log import setup_logging, log_info, log_metadata
+from record_imports.log import setup_logging, log_fail, log_info, log_metadata
 
 # Set global paths.
 PATH_RAW = '/astro/clear/cgosmeyer/test_data/RAW' #paths['path_to_RAW']
@@ -331,7 +342,8 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
 #-------------------------------------------------------------------------------
 
 @log_metadata
-def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.'):
+def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.',
+    load_only=False):
     """ Model the contamination.
 
     Parameters
@@ -350,6 +362,8 @@ def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.'
         (The idea of 're-loading' if you are alread in '.' makes no sense if
         working from time-stamped directories that are created for each seperate
         run of the pipeline.)
+    load_models : {True, False}
+        Set to True if want to reload already existing models.
 
     Returns
     -------
@@ -404,14 +418,16 @@ def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.'
 
     
     logging.info(" ")
-    if use_model_path != '.':
+    if use_model_path == '.' and not load_only:
+        logging.info("Creating GroupFLTs on field {}".format(field))
+    elif use_model_path == '.' and load_only:
+        logging.info("Loading GroupFLTs on field {}".format(field))
+    elif use_model_path != '.':
         # Change directory to one containing files to load.
         os.chdir(use_model_path)
         logging.info("Loading GroupFLTs on field {}".format(field))
-    else:
-        logging.info("Creating GroupFLTs on field {}".format(field))
 
-    # Do modeling if in '.' or load GroupFLT if in older directory.
+    # Do modeling if GroupFLTs not already saved, or load if they are
     grp = GroupFLT(
         grism_files=grism_files, 
         direct_files=[], 
@@ -422,7 +438,9 @@ def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.'
         cpu_count=8)
 
     # If first time creating the models, need refine model and save the GroupFLT
-    if use_model_path != '.':
+    # [[might be better if check whether contam extension is empty?]]
+    if not load_only:
+        logging.info("Computing contam model.")
         grp.compute_full_model(mag_limit=26)  # mag limit for contam model
         grp.refine_list(poly_order=2, mag_limits=[16, 24])
 
@@ -472,15 +490,9 @@ def fit(grp, field='', mag_lim=35, release=False):
     #question: are these appropriate for clear?
     pline = {'kernel': 'point', 'pixfrac': 0.2, 'pixscale': 0.1, 'size': 8, 'wcs': None}
 
-    # ids that cause errors for reasons I do not know
-    bad_ids = [14784, # hangs after "First iteration: z_best="
-               15783, # hangs after "First iteration: z_best="
-               16229, # hangs after "First iteration: z_best="
-               16231,
-               16293] # hangs after "First iteration: z_best="
-
     already_completed = glob.glob('*stack.png')
     already_completed = [int(id.split('.stack.png')[0].split('_')[1]) for id in already_completed]
+    already_completed = []
 
     # Loop over all ids, mag, and run extracting and fitting only on ids that
     # full under the magnitude limit. 
@@ -588,6 +600,7 @@ def sort_extractions():
 
 #-------------------------------------------------------------------------------
 
+@log_fail
 @log_info
 @log_metadata
 def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
@@ -640,7 +653,7 @@ def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
                 .format(field.upper()))
             logging.info("...")
             grp = model(visits=visits, field=field, ref_filter=ref_filter, 
-                use_prep_path=use_prep_path)
+                use_prep_path=use_prep_path, load_only=False)
 
         # Do the fitting; need have option which outputs subdir to use? 
         if 'fit' in do_steps:
@@ -653,8 +666,9 @@ def clear_grizli_pipeline(fields, ref_filter='F105W', mag_lim=25,
                 # from `GrismFLT` files for given field. 
                 # Supply `use_model_path` so it knows from where to load GrismFLTs.
                 grp = model(visits=visits, field=field, ref_filter=ref_filter, 
-                    use_prep_path='.', use_model_path=use_model_path)
-            fit(grp, field=field, mag_lim=mag_lim, release=False)
+                    use_prep_path='.', use_model_path=use_model_path, 
+                    load_only=True)
+            fit(grp, field=field, mag_lim=mag_lim, release=False) 
 
 
 #-------------------------------------------------------------------------------
