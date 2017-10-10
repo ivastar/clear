@@ -11,11 +11,10 @@ Use:
     >>> python clear_grizli_pipeline.py 
 
     --fields : (optional) By default all pointings. Or choose from
-        'GS1', 'GS2', 'GS3', 'GS4', 'GS5', 'ERSPRIME', 'GN1', 
-        'GN2', 'GN3', 'GN4', 'GN5', 'GN7'
+        [GS1, GS2, GS3, GS4, GS5, ERSPRIME, GN1, GN2, GN3, GN4, GN5, GN7]
 
     --steps : (optional) By default all pipeline steps. Or choose from
-        'prep', 'model', 'fit'
+        [prep, model, fit]
 
     --mlim : (optional) Magnitude limit of extractions. By default "25".
 
@@ -53,10 +52,11 @@ Example:
 
 Dependencies:
 
-    * cgosmeyer's fork of grizli: https://github.com/cgosmeyer/grizli
-    * record_imports: https://github.com/cgosmeyer/record_imports
-    * analysis_tools [[really should try to do this the astropy way, though 
-    it might kill me]]
+    * cgosmeyer's fork of `grizli` : https://github.com/cgosmeyer/grizli
+    * `record` : https://github.com/cgosmeyer/record
+    * `analysis_tools` : https://github.com/cgosmeyer/analysis_tools
+     [[really should try to do this the astropy way, though 
+     it might kill me]]
 
 Inputs:
     
@@ -110,8 +110,8 @@ from clear_inspection_tools import flt_residuals
 from analysis_tools.tables import bypass_table 
 from grizli.prep import process_direct_grism_visit
 from grizli.multifit import GroupFLT, MultiBeam, get_redshift_fit_defaults
-#from record_imports.record_imports import meta_record_imports
-from record_imports.log import setup_logging, log_fail, log_info, log_metadata
+#from record.meta_record_imports import meta_record_imports
+from record.log import setup_logging, log_fail, log_info, log_metadata
 
 # Set global paths.
 PATH_RAW = '/astro/clear/cgosmeyer/test_data/RAW' #paths['path_to_RAW']
@@ -132,7 +132,6 @@ overlapping_fields = {'GN1':['GDN20'],
                       'GN7':['GDN3', 'GDN6', 'GDN7', 'GDN11'],
                       'ERSPRIME':['WFC3-ERSII-G01']}
 
-# could a collections.namedtuple be used here instead?
 class Pointing():
     """ Generalization of GN1, GS1, ERSPRIME, etc
 
@@ -163,7 +162,8 @@ class Pointing():
                 self.ref_image = 'goodss-F105W-astrodrizzle-v4.3_drz_sci.fits'
             
 
-# https://stackoverflow.com/questions/25027122/break-the-function-after-certain-time
+# Define TimeoutException to handle run_all hanging error.
+# from https://stackoverflow.com/questions/25027122/break-the-function-after-certain-time
 
 import signal
 
@@ -253,50 +253,38 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
 
     Outputs 
     -------
-    The individual visit outputs are
+    The individual visit outputs:
 
-    * _crclean.fits
-    * flt.fits - modified, only outputs needed for model step
+    * <root>_crclean.fits   : icxt51jwq_crclean.fits
+    * <root>_flt.fits       : icxt51jwq_flt.fits
+        - modified, only output from `prep` needed for `model`.
 
-    In the directory specified by path_to_outputs the combined for direct 
-    images are
+    The combined direct image outputs:
 
-    * gn2-cxt-51-345.0-f105w_asn.fits
-    * gn2-cxt-51-345.0-f105w_bkg.fits
-    * gn2-cxt-51-345.0-f105w_drz_sci.fits - drizzled direct mosaic
-    * gn2-cxt-51-345.0-f105w_drz_wht.fits 
-    * gn2-cxt-51-345.0-f105w_seg.fits
-    * gn2-cxt-51-345.0-f105w_wcs.fits 
-    * gn2-cxt-55-022.0-f105w.cat   
-    * gn2-cxt-55-022.0-f105w.cat.radec
-    * gn2-cxt-55-022.0-f105w.cat.reg 
-    * gn2-cxt-53-309.0-f105w_shifts.log 
+    * <pointing>-<xxx>-<visit>-<position angle>-<filter>
+      _asn.fits         : gn2-cxt-51-345.0-f105w_asn.fits
+    * _bkg_fits         : gn2-cxt-51-345.0-f105w_bkg.fits
+    * _drz_sci.fits     : gn2-cxt-51-345.0-f105w_drz_sci.fits
+    * _drz_wht.fits     : gn2-cxt-51-345.0-f105w_drz_wht.fits 
+    * _seg.fits         : gn2-cxt-51-345.0-f105w_seg.fits
+    * _wcs.fits         : gn2-cxt-51-345.0-f105w_wcs.fits 
+    * .cat              : gn2-cxt-55-022.0-f105w.cat   
+    * .cat.radec        : gn2-cxt-55-022.0-f105w.cat.radec
+    * .cat.reg          : gn2-cxt-55-022.0-f105w.cat.reg 
+    * _shifts.log       : gn2-cxt-53-309.0-f105w_shifts.log 
+    * _wcs.fits         : : gn2-cxt-53-309.0-f105w_wcs.fits
+    * _wcs.log          : gn2-cxt-53-309.0-f105w_wcs.log
+    * _wcs.png          : gn2-cxt-53-309.0-f105w_wcs.png
 
-    For grism images
+    The combined grism image outputs:
 
-    * gn2-cxt-51-345.0-g102_asn.fits 
-    * gn2-cxt-51-345.0-g102_drz_sci.fits
-    * gn2-cxt-51-345.0-g102_drz_wht.fits 
-    * gn2-cxt-53-309.0-g102_1_sky_background.info 
-
-    Astrometry:
-    * _wcs.png - diagnostic of [...]
-    * _wcs.log - 
-    * _wcs.fits - 
-
-    Grism sky background subtraction:
-    * _column.png - diagnostic of [...]
-    * _column.dat - produces PNG plot
-
-
-
-
-    Aligned, background-subtracted FLTs 
-
-    Drizzled mosaics
-
-
-    [which are analogs of the old pipeline's files?]
+    * <pointing>-<xxx>-<visit>-<position angle>-<grism>
+      _asn.fits                 : gn2-cxt-51-345.0-g102_asn.fits 
+    * _drz_sci.fits             : gn2-cxt-51-345.0-g102_drz_sci.fits
+    * _drz_wht.fits             : gn2-cxt-51-345.0-g102_drz_wht.fits 
+    * _1_sky_background.info    : gn2-cxt-53-309.0-g102_1_sky_background.info 
+    * _column.png               : gn2-cxt-53-309.0-g102_column.png
+    * _column.dat               : gn2-cxt-53-309.0-g102_column.dat
 
     """
 
@@ -319,11 +307,11 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
                 field = product2.split('-')[0]
                 if basename1 == basename2 and ref_grism.lower() in filt2.lower():
                     # Point to correct, field-dependent radec catalog
-                    print("Matched direct to grism products: {} {}"\
+                    logging.info("Matched direct to grism products: {} {}"\
                         .format(product1, product2))
                     p = Pointing(field=field, ref_filter=ref_filter)
                     radec_catalog = p.radec_catalog
-                    print("Using radec catalog: {}".format(radec_catalog))
+                    logging.info("Using radec catalog: {}".format(radec_catalog))
 
                     # Do the prep steps.
                     logging.info(" ")
@@ -372,10 +360,10 @@ def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.'
 
     Outputs
     -------
-    * icat08hiq_flt.01.wcs.fits
-    * icat08hiq.01.GrismFLT.fits
-    * icat08hiq.01.GrismFLT.pkl - contains what? 
-    * icat08hiq_residuals.png
+    * <root>_flt.01.wcs.fits    : icat08hiq_flt.01.wcs.fits
+    * <root>.01.GrismFLT.fits   : icat08hiq.01.GrismFLT.fits
+    * <root>.01.GrismFLT.pkl    : icat08hiq.01.GrismFLT.pkl 
+    * <root>_residuals.png      : icat08hiq_residuals.png
 
     """
 
@@ -469,11 +457,15 @@ def fit(grp, field='', mag_lim=35, release=False):
     mag_lim : int
         The magnitude limit of sources to extract and fit.
         By default '35', unrealistically high so to include everything.
-    release : {True, False}
+    release : NotImplemented
+        Should be a number, which will also be a root directory of 
+        the release's outputs?
 
     Outputs
     -------
-
+    * <field>_<id>.beams.fits   : GN2_23121.beams.fits
+    * <field>_<id>.stack.fits   : GN2_23121.stack.fits
+    * <field>_<id>.stack.png    : GN2_23121.stack.png
 
     """
     # Load templates with combined emission line complexes for the redshift fit 
@@ -492,12 +484,13 @@ def fit(grp, field='', mag_lim=35, release=False):
 
     already_completed = glob.glob('*stack.png')
     already_completed = [int(id.split('.stack.png')[0].split('_')[1]) for id in already_completed]
-    already_completed = []
+    #already_completed = []
+    bad_ids = [20124, 21731, 23121]
 
     # Loop over all ids, mag, and run extracting and fitting only on ids that
     # full under the magnitude limit. 
     for id, mag in zip(np.array(grp.catalog['NUMBER']), np.array(grp.catalog['MAG_AUTO'])):
-        if mag <= mag_lim and id not in already_completed:
+        if mag <= mag_lim and id not in already_completed and id not in bad_ids:
             print(id, mag)
             # Extract the 2D traces
             beams = grp.get_beams(id, size=80) #size??
@@ -696,7 +689,7 @@ def parse_args():
     rerun_help += "Do NOT do this for actual runs, to keep your results clean."
     prepdir_help = "Timestamp directory containing pre-processed files. '.' by default."
     modeldir_help = "Timestamp directory containing model files. '.' by default."
-    release_help = "Set to True if extractions and fits are to be placed in a release."
+    release_help = "NotImplemented."
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--fields', dest = 'fields',
@@ -736,7 +729,6 @@ def parse_args():
 
 if __name__=='__main__':
     # Parse user inputs
-    # (not yet implemented)
     args = parse_args()
     fields = args.fields
     do_steps = args.do_steps
@@ -745,7 +737,7 @@ if __name__=='__main__':
     rerun = tobool(args.rerun) #this is so nifty!
     prepdir = args.prepdir
     modeldir = args.modeldir
-    release = args.release # Not implemented
+    release = args.release # NotImplemented
 
     if rerun:
         PATH_OUTPUTS_TIMESTAMP = retrieve_latest_outputs(path_outputs=PATH_OUTPUTS)
@@ -767,7 +759,6 @@ if __name__=='__main__':
     # steps that you might change these to specific time-stamp directories
     # in 'outputs/'.
 
-    clear_grizli_pipeline(fields=['GN2'], ref_filter='F105W', mag_lim=25, 
+    clear_grizli_pipeline(fields=['GN2'], ref_filter=ref_filter, mag_lim=mag_lim, 
         do_steps=do_steps, use_prep_path=prepdir, use_model_path=modeldir)
-    #prepdir='2017.09.22.15.30.29'
 
