@@ -33,7 +33,7 @@ Use:
     --release : NotImplemented
 
 
-Example:
+Examples:
 
     # 1.
     # Run pipeline with just "model" and "fit" steps, on pointings "GN2" and "GN3" down
@@ -86,6 +86,11 @@ Notes:
       is still able to do all fields by default, however. See the arg 
       parse options.
 
+To do:
+
+    * How does grizli know where persistence files are and does it apply them?
+    * Function to sort extractions for a release. 
+
 """
 from __future__ import print_function
 
@@ -110,7 +115,6 @@ from clear_inspection_tools import flt_residuals
 from analysis_tools.tables import bypass_table 
 from grizli.prep import process_direct_grism_visit
 from grizli.multifit import GroupFLT, MultiBeam, get_redshift_fit_defaults
-#from record.meta_record_imports import meta_record_imports
 from record.log import setup_logging, log_fail, log_info, log_metadata
 
 # Set global paths.
@@ -163,7 +167,8 @@ class Pointing():
             
 
 # Define TimeoutException to handle run_all hanging error.
-# from https://stackoverflow.com/questions/25027122/break-the-function-after-certain-time
+# See grizli issue https://github.com/gbrammer/grizli/issues/16
+# Solution from https://stackoverflow.com/questions/25027122/break-the-function-after-certain-time
 
 import signal
 
@@ -178,7 +183,8 @@ signal.signal(signal.SIGALRM, timeout_handler)
 
 
 def find_files(fields):
-    """
+    """ Finds all FLT files from given fields and places them with metadata 
+    into OrderedDicts.
 
     Parameters
     ----------
@@ -272,7 +278,7 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
     * .cat.radec        : gn2-cxt-55-022.0-f105w.cat.radec
     * .cat.reg          : gn2-cxt-55-022.0-f105w.cat.reg 
     * _shifts.log       : gn2-cxt-53-309.0-f105w_shifts.log 
-    * _wcs.fits         : : gn2-cxt-53-309.0-f105w_wcs.fits
+    * _wcs.fits         : gn2-cxt-53-309.0-f105w_wcs.fits
     * _wcs.log          : gn2-cxt-53-309.0-f105w_wcs.log
     * _wcs.png          : gn2-cxt-53-309.0-f105w_wcs.png
 
@@ -332,7 +338,7 @@ def prep(visits, ref_filter='F105W', ref_grism='G102'):
 @log_metadata
 def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.',
     load_only=False):
-    """ Model the contamination.
+    """ Models the contamination.
 
     Parameters
     ----------
@@ -360,10 +366,10 @@ def model(visits, field='', ref_filter='', use_prep_path='.', use_model_path='.'
 
     Outputs
     -------
-    * <root>_flt.01.wcs.fits    : icat08hiq_flt.01.wcs.fits
-    * <root>.01.GrismFLT.fits   : icat08hiq.01.GrismFLT.fits
-    * <root>.01.GrismFLT.pkl    : icat08hiq.01.GrismFLT.pkl 
-    * <root>_residuals.png      : icat08hiq_residuals.png
+    * <root>_flt.01.wcs.fits    : icxt51jwq_flt.01.wcs.fits
+    * <root>.01.GrismFLT.fits   : icxt51jwq.01.GrismFLT.fits
+    * <root>.01.GrismFLT.pkl    : icxt51jwq.01.GrismFLT.pkl 
+    * <root>_residuals.png      : icxt51jwq_residuals.png
 
     """
 
@@ -748,8 +754,6 @@ if __name__=='__main__':
 
     # Setup logging to save in the output directory
     setup_logging(__file__, path_logs=PATH_OUTPUTS_TIMESTAMP, stdout=True)
-
-    #meta_record_imports(__file__, print_or_log='print') #but how direct this to a log file?
 
     # Call the main pipeline function.
 
