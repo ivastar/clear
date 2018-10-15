@@ -78,29 +78,41 @@ class Gen_spec(object):
         self.fl = C * ifl / self.filt
         
 class Gen_MB_spec(object):
-    def __init__(self, beams, redshift, spec_file, minwv = 7800, maxwv = 11200):
+    def __init__(self, beams, redshift, spec_file_102, spec_file_141, minwv_102 = 7800, maxwv_102 = 11500,
+                minwv_141 = 11300, maxwv_141 = 16000):
         self.mb = multifit.MultiBeam(beams)
         self.redshift = redshift
-        self.gal_wv, self.gal_fl, self.gal_er = np.load(spec_file)
         
         """ 
 
 
         """
+        self.gal_wv_102, self.gal_fl_102, self.gal_er_102 = np.load(spec_file_102)
 
-        IDX = [U for U in range(len(self.gal_wv)) if minwv <= self.gal_wv[U] <= maxwv]
+        IDX = [U for U in range(len(self.gal_wv_102)) if minwv_102 <= self.gal_wv_102[U] <= maxwv_102]
 
-        self.gal_wv_rf = self.gal_wv[IDX] / (1 + self.redshift)
-        self.gal_wv = self.gal_wv[IDX]
-        self.gal_fl = self.gal_fl[IDX]
-        self.gal_er = self.gal_er[IDX]
+        self.gal_wv_rf_102 = self.gal_wv_102[IDX] / (1 + self.redshift)
+        self.gal_wv_102 = self.gal_wv_102[IDX]
+        self.gal_fl_102 = self.gal_fl_102[IDX]
+        self.gal_er_102 = self.gal_er_102[IDX]
 
+        self.gal_wv_141, self.gal_fl_141, self.gal_er_141 = np.load(spec_file_141)
+
+        IDX = [U for U in range(len(self.gal_wv_141)) if minwv_141 <= self.gal_wv_141[U] <= maxwv_141]
+
+        self.gal_wv_rf_141 = self.gal_wv_141[IDX] / (1 + self.redshift)
+        self.gal_wv_141 = self.gal_wv_141[IDX]
+        self.gal_fl_141 = self.gal_fl_141[IDX]
+        self.gal_er_141 = self.gal_er_141[IDX]
+        
         ## Get sensitivity function
         flat = self.mb.optimal_extract(self.mb.flat_flam[self.mb.fit_mask])
         
-        self.filt = interp1d(flat['G102']['wave'], flat['G102']['flux'])(self.gal_wv)
+        self.filt_102 = interp1d(flat['G102']['wave'], flat['G102']['flux'])(self.gal_wv_102)
+        self.filt_141 = interp1d(flat['G141']['wave'], flat['G141']['flux'])(self.gal_wv_141)
         
-    def Sim_spec(self, model_file, model_redshift = 0, dust = 0):
+        
+    def Sim_spec(self, model_file, model_redshift = 0):
         mwv, mfl = np.load(model_file)
         
         if model_redshift ==0:
@@ -112,8 +124,14 @@ class Gen_MB_spec(object):
         ## Extract model and flat
         sp = self.mb.optimal_extract(spec)
         
-        ifl = interp1d(sp['G102']['wave'], sp['G102']['flux'])(self.gal_wv)
+        ifl = interp1d(sp['G102']['wave'], sp['G102']['flux'])(self.gal_wv_102)
         
-        C = Scale_model(self.gal_fl, self.gal_er, ifl / self.filt)
+        C = Scale_model(self.gal_fl_102, self.gal_er_102, ifl / self.filt_102)
 
-        self.fl = C * ifl / self.filt
+        self.fl_102 = C * ifl / self.filt_102
+        
+        ifl = interp1d(sp['G141']['wave'], sp['G141']['flux'])(self.gal_wv_141)
+        
+        C = Scale_model(self.gal_fl_141, self.gal_er_141, ifl / self.filt_141)
+
+        self.fl_141 = C * ifl / self.filt_141
