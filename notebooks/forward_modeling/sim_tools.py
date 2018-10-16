@@ -36,28 +36,45 @@ def Scale_model(data, sigma, model):
     return np.sum(((data * model) / sigma ** 2)) / np.sum((model ** 2 / sigma ** 2))
 
 class Gen_spec(object):
-    def __init__(self, beam, redshift, spec_file, minwv = 7800, maxwv = 11200):
-        self.beam = model.BeamCutout(fits_file = beam)
-        self.redshift = redshift
-        self.gal_wv, self.gal_fl, self.gal_er = np.load(spec_file)
-        
+    def __init__(self, beam_102, beam_141, redshift, spec_file_102, spec_file_141, 
+                minwv_102 = 7800, maxwv_102 = 11350,
+                minwv_141 = 10700, maxwv_141 = 16000):
+        self.beam_102 = model.BeamCutout(fits_file = beam_102)
+        self.beam_141 = model.BeamCutout(fits_file = beam_141)
+        self.redshift = redshift       
         """ 
 
 
         """
 
-        IDX = [U for U in range(len(self.gal_wv)) if minwv <= self.gal_wv[U] <= maxwv]
+        self.gal_wv_102, self.gal_fl_102, self.gal_er_102 = np.load(spec_file_102)
 
-        self.gal_wv_rf = self.gal_wv[IDX] / (1 + self.redshift)
-        self.gal_wv = self.gal_wv[IDX]
-        self.gal_fl = self.gal_fl[IDX]
-        self.gal_er = self.gal_er[IDX]
+        IDX = [U for U in range(len(self.gal_wv_102)) if minwv_102 <= self.gal_wv_102[U] <= maxwv_102]
+
+        self.gal_wv_rf_102 = self.gal_wv_102[IDX] / (1 + self.redshift)
+        self.gal_wv_102 = self.gal_wv_102[IDX]
+        self.gal_fl_102 = self.gal_fl_102[IDX]
+        self.gal_er_102 = self.gal_er_102[IDX]
+
+        self.gal_wv_141, self.gal_fl_141, self.gal_er_141 = np.load(spec_file_141)
+
+        IDX = [U for U in range(len(self.gal_wv_141)) if minwv_141 <= self.gal_wv_141[U] <= maxwv_141]
+
+        self.gal_wv_rf_141 = self.gal_wv_141[IDX] / (1 + self.redshift)
+        self.gal_wv_141 = self.gal_wv_141[IDX]
+        self.gal_fl_141 = self.gal_fl_141[IDX]
+        self.gal_er_141 = self.gal_er_141[IDX]
 
         ## Get sensitivity function
-        flat = self.beam.flat_flam.reshape(self.beam.beam.sh_beam)
-        fwv, ffl, e = self.beam.beam.optimal_extract(flat, bin=0)
+        flat = self.beam_102.flat_flam.reshape(self.beam_102.beam.sh_beam)
+        fwv, ffl, e = self.beam_102.beam.optimal_extract(flat, bin=0)
         
-        self.filt = interp1d(fwv, ffl)(self.gal_wv)
+        self.filt_102 = interp1d(fwv, ffl)(self.gal_wv_102)
+        
+        flat = self.beam_141.flat_flam.reshape(self.beam_141.beam.sh_beam)
+        fwv, ffl, e = self.beam_141.beam.optimal_extract(flat, bin=0)
+        
+        self.filt_141 = interp1d(fwv, ffl)(self.gal_wv_141)
         
     def Sim_spec(self, model_file, model_redshift = 0, dust = 0):
         model_wv, model_fl = np.load(model_file)
@@ -66,20 +83,30 @@ class Gen_spec(object):
             model_redshift = self.redshift 
         
         ## Compute the models
-        self.beam.compute_model(spectrum_1d=[model_wv*(1+model_redshift),model_fl])
+        self.beam_102.compute_model(spectrum_1d=[model_wv*(1+model_redshift),model_fl])
+        self.beam_141.compute_model(spectrum_1d=[model_wv*(1+model_redshift),model_fl])
 
         ## Extractions the model (error array here is meaningless)
-        w, f, e = self.beam.beam.optimal_extract(self.beam.model , bin=0)
+        w, f, e = self.beam_102.beam.optimal_extract(self.beam_102.model , bin=0)
 
-        ifl = interp1d(w, f)(self.gal_wv)
+        ifl = interp1d(w, f)(self.gal_wv_102)
         
-        C = Scale_model(self.gal_fl, self.gal_er, ifl / self.filt)
+        C = Scale_model(self.gal_fl_102, self.gal_er_102, ifl / self.filt_102)
 
-        self.fl = C * ifl / self.filt
+        self.fl_102 = C * ifl / self.filt_102
+        
+        ## Extractions the model (error array here is meaningless)
+        w, f, e = self.beam_141.beam.optimal_extract(self.beam_141.model , bin=0)
+
+        ifl = interp1d(w, f)(self.gal_wv_141)
+        
+        C = Scale_model(self.gal_fl_141, self.gal_er_141, ifl / self.filt_141)
+
+        self.fl_141 = C * ifl / self.filt_141
         
 class Gen_MB_spec(object):
-    def __init__(self, beams, redshift, spec_file_102, spec_file_141, minwv_102 = 7800, maxwv_102 = 11500,
-                minwv_141 = 11300, maxwv_141 = 16000):
+    def __init__(self, beams, redshift, spec_file_102, spec_file_141, minwv_102 = 7800, maxwv_102 = 11350,
+                minwv_141 = 10700, maxwv_141 = 16000):
         self.mb = multifit.MultiBeam(beams)
         self.redshift = redshift
         
