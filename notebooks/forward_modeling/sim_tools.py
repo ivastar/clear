@@ -131,7 +131,7 @@ class Gen_spec(object):
         
         if self.beam_141 is not None:   
             ## Compute the models
-            self.beam_141.compute_model(spectrum_1d=[model_wv*(1+model_redshift),model_fl])
+            self.beam_141.compute_model(spectrum_1d=[mwv*(1+model_redshift),mfl])
 
             ## Extractions the model (error array here is meaningless)
             w, f, e = self.beam_141.beam.optimal_extract(self.beam_141.model , bin=0)
