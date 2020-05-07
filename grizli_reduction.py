@@ -594,7 +594,7 @@ if __name__ == '__main__':
 
 
 
-    '''
+
     if not os.path.isdir(HOME_PATH): os.system('mkdir %s'%HOME_PATH)
 
     print ('Changing to %s'%HOME_PATH)
@@ -634,7 +634,7 @@ if __name__ == '__main__':
         to_save = np.array([grp.catalog['NUMBER'], grp.catalog['MAG_AUTO']])
         np.save('/user/rsimons/grizli_extractions/Catalogs/model_catalogs/%s_catalog.npy'%field, to_save)
 
-    '''
+
 
     if fit_bool:
 
